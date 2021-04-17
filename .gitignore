@@ -2,3 +2,6 @@
 /src/obj
 /BizHawk
 *.gbc
+*.suo
+*.csproj.user
+.vs/
