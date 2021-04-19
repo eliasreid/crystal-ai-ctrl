@@ -8,15 +8,16 @@ using BizHawk.Client.Common;
 using BizHawk.WinForms.Controls;
 using BizHawk.Emulation.Common;
 
-
 namespace BizHawk.Tool.CrystalCtrl
+
 {
+    
     [ExternalTool("CrystalAiCtrl")]
     [ExternalToolApplicability.SingleSystem(CoreSystem.GameBoy)]
     public sealed class CrystalAiForm : Form, IExternalToolForm
     {
 
-        const uint BattleMode = 0xD116;
+
 
         [RequiredApi]
         public ICommApi? _maybeCommAPI { get; set; }
@@ -72,6 +73,14 @@ namespace BizHawk.Tool.CrystalCtrl
         //Mem domain System Bus
         //Mem domain CartRAM
 
+        //Game constants
+        const uint BattleMode = 0xD22D;
+        UInt16 CurMonWriteAddress = 0x56CE;
+        UInt16 CurPartyMon = 0xD109;
+        List<byte> ExpectedData = new List<byte> { 0x21, 0xA7, 0xD2 };
+
+        const UInt16 InitBattleTrainer = 0x7594;
+
         private bool battleModeChanged = false;
 
         public CrystalAiForm()
@@ -95,16 +104,20 @@ namespace BizHawk.Tool.CrystalCtrl
             Console.WriteLine("Restart called");
 
             //In case of battlemode - good enough to read the value at the end of the frame
-            _maybeMemoryEventsAPI.AddWriteCallback((_, written_val, flags) => {
+            //_maybeMemoryEventsAPI.AddWriteCallback((_, written_val, flags) => {
+            //    battleModeChanged = true;
+            //    Console.WriteLine("BattleMode written");
+            //}, BattleMode, "System Bus");
+            //Switched to exec InitEnemyTrainer, because wBattleMode addr is re-used in Crystal
+            _maybeMemoryEventsAPI.AddExecCallback((_, written_val, flags) => {
                 battleModeChanged = true;
-                Console.WriteLine("BattleMode written");
-            }, BattleMode, "System Bus");
+                Console.WriteLine("Init enemy trainer called");
+            }, InitBattleTrainer, "System Bus");
 
 
             //This is to rewrite wCurPartyMon in LoadEnemyMonToSwitchTo before it is used
             //TODO: Should be a breakpoint?
-            UInt16 CurMonWriteAddress = 0x5589;
-            List<byte> ExpectedData = new List<byte> { 0x21, 0x7C, 0xDD };
+
             _maybeMemoryEventsAPI.AddExecCallback((_, cbAddr, _) =>
             {
                 //Reading bytes at the program counter location and comparing with data I know should be there
@@ -114,10 +127,21 @@ namespace BizHawk.Tool.CrystalCtrl
                 {
                     //TODO: pause emulation - Set up UI for move selection
                     Console.WriteLine("enemy selecting poke");
+                    _maybeClientAPI.Pause();
                 }
 
             }, CurMonWriteAddress, "System Bus");
 
+        }
+
+        /// <summary>
+        /// Must be valid index based on available mons.
+        /// Emulation should be paused on CurMonWriteAddress
+        /// </summary>
+        /// <param name="partyIndex"></param>
+        private void ChooseNextPokemon(byte partyIndex)
+        {
+            _maybeMemAPI.WriteByte(CurPartyMon, partyIndex);
         }
 
 		public bool AskSaveChanges() => true;
@@ -127,27 +151,27 @@ namespace BizHawk.Tool.CrystalCtrl
             switch (type)
             {
                 case ToolFormUpdateType.PostFrame:
-                    if (battleModeChanged)
-                    {
-                        //check mem address
-                        var currMode = _maybeMemAPI.ReadByte(BattleMode);
-                        switch (currMode)
-                        {
-                            case 0x00:
-                                Console.WriteLine("BattleMode: Overworld");
-                                break;
-                            case 0x01:
-                                Console.WriteLine("BattleMode: Wild Mon");
-                                break;
-                            case 0x02:
-                                Console.WriteLine("Battlemode: Trainer");
-                                break;
-                            default:
-                                Console.WriteLine("Battlemode: ???");
-                                break;
-                        }
-                        battleModeChanged = false;
-                    }
+                    //if (battleModeChanged)
+                    //{
+                    //    //check mem address
+                    //    var currMode = _maybeMemAPI.ReadByte(BattleMode);
+                    //    switch (currMode)
+                    //    {
+                    //        case 0x00:
+                    //            Console.WriteLine("BattleMode: Overworld");
+                    //            break;
+                    //        case 0x01:
+                    //            Console.WriteLine("BattleMode: Wild Mon");
+                    //            break;
+                    //        case 0x02:
+                    //            Console.WriteLine("Battlemode: Trainer ----");
+                    //            break;
+                    //        default:
+                    //            Console.WriteLine($"Battlemode: unknown ({currMode})");
+                    //            break;
+                    //    }
+                    //    battleModeChanged = false;
+                    //}
                     break;
                 default:
                     break;
@@ -245,6 +269,7 @@ namespace BizHawk.Tool.CrystalCtrl
             this.btnMon5.TabIndex = 0;
             this.btnMon5.Text = "Mon 5";
             this.btnMon5.UseVisualStyleBackColor = true;
+            this.btnMon5.Click += new System.EventHandler(this.btnMon5_Click);
             // 
             // btnMon4
             // 
@@ -254,6 +279,7 @@ namespace BizHawk.Tool.CrystalCtrl
             this.btnMon4.TabIndex = 0;
             this.btnMon4.Text = "Mon 4";
             this.btnMon4.UseVisualStyleBackColor = true;
+            this.btnMon4.Click += new System.EventHandler(this.btnMon4_Click);
             // 
             // btnMon3
             // 
@@ -263,6 +289,7 @@ namespace BizHawk.Tool.CrystalCtrl
             this.btnMon3.TabIndex = 0;
             this.btnMon3.Text = "Mon 3";
             this.btnMon3.UseVisualStyleBackColor = true;
+            this.btnMon3.Click += new System.EventHandler(this.btnMon3_Click);
             // 
             // btnMon2
             // 
@@ -272,6 +299,7 @@ namespace BizHawk.Tool.CrystalCtrl
             this.btnMon2.TabIndex = 0;
             this.btnMon2.Text = "Mon 2";
             this.btnMon2.UseVisualStyleBackColor = true;
+            this.btnMon2.Click += new System.EventHandler(this.btnMon2_Click);
             // 
             // btnMon1
             // 
@@ -281,6 +309,7 @@ namespace BizHawk.Tool.CrystalCtrl
             this.btnMon1.TabIndex = 0;
             this.btnMon1.Text = "Mon 1";
             this.btnMon1.UseVisualStyleBackColor = true;
+            this.btnMon1.Click += new System.EventHandler(this.btnMon1_Click);
             // 
             // btnMon0
             // 
@@ -290,6 +319,7 @@ namespace BizHawk.Tool.CrystalCtrl
             this.btnMon0.TabIndex = 0;
             this.btnMon0.Text = "Mon 0";
             this.btnMon0.UseVisualStyleBackColor = true;
+            this.btnMon0.Click += new System.EventHandler(this.btnMon0_Click);
             // 
             // lblCurrentState
             // 
@@ -314,5 +344,40 @@ namespace BizHawk.Tool.CrystalCtrl
 
         }
 
+        private void btnMon0_Click(object sender, EventArgs e)
+        {
+            ChooseNextPokemon(0);
+            _maybeClientAPI.Unpause();
+        }
+
+        private void btnMon1_Click(object sender, EventArgs e)
+        {
+            ChooseNextPokemon(1);
+            _maybeClientAPI.Unpause();
+        }
+
+        private void btnMon2_Click(object sender, EventArgs e)
+        {
+            ChooseNextPokemon(2);
+            _maybeClientAPI.Unpause();
+        }
+
+        private void btnMon3_Click(object sender, EventArgs e)
+        {
+            ChooseNextPokemon(3);
+            _maybeClientAPI.Unpause();
+        }
+
+        private void btnMon4_Click(object sender, EventArgs e)
+        {
+            ChooseNextPokemon(4);
+            _maybeClientAPI.Unpause();
+        }
+
+        private void btnMon5_Click(object sender, EventArgs e)
+        {
+            ChooseNextPokemon(5);
+            _maybeClientAPI.Unpause();
+        }
     }
 }
