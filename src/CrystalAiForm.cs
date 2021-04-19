@@ -8,6 +8,7 @@ using BizHawk.Client.Common;
 using BizHawk.WinForms.Controls;
 using BizHawk.Emulation.Common;
 
+
 namespace BizHawk.Tool.CrystalCtrl
 {
     [ExternalTool("CrystalAiCtrl")]
@@ -19,28 +20,33 @@ namespace BizHawk.Tool.CrystalCtrl
 
         [RequiredApi]
         public ICommApi? _maybeCommAPI { get; set; }
-
         [RequiredApi]
         public IMemoryEventsApi? _maybeMemoryEventsAPI { get; set; }
-
         [RequiredApi]
         public IEmuClientApi? _maybeClientAPI { get; set; }
-
         [RequiredApi]
         public IEmulationApi? _maybeEmuAPI { get; set; }
-
         [RequiredApi]
         public IGameInfoApi? _maybeGameInfoAPI { get; set; }
-
         [RequiredApi]
         public IGuiApi? _maybeGuiAPI { get; set; }
-
         [RequiredApi]
         public IMemoryApi? _maybeMemAPI { get; set; }
 
         private ApiContainer? _apis;
-
-
+        private GroupBox grpMoves;
+        private Button btnMove1;
+        private Button btnMove0;
+        private Button btnMove2;
+        private Button btnMove3;
+        private GroupBox grpMons;
+        private Button btnMon5;
+        private Button btnMon4;
+        private Button btnMon3;
+        private Button btnMon2;
+        private Button btnMon1;
+        private Button btnMon0;
+        private Label lblCurrentState;
 
         //the null-coalescing assignment operator ??= assigns the value of its right-hand operand to its left-hand operand
         //only if the left-hand operand evaluates to null. The ??= operator doesn't evaluate its
@@ -150,9 +156,163 @@ namespace BizHawk.Tool.CrystalCtrl
 
         private void InitializeComponent()
         {
+            this.grpMoves = new System.Windows.Forms.GroupBox();
+            this.btnMove3 = new System.Windows.Forms.Button();
+            this.btnMove2 = new System.Windows.Forms.Button();
+            this.btnMove1 = new System.Windows.Forms.Button();
+            this.btnMove0 = new System.Windows.Forms.Button();
+            this.grpMons = new System.Windows.Forms.GroupBox();
+            this.btnMon5 = new System.Windows.Forms.Button();
+            this.btnMon4 = new System.Windows.Forms.Button();
+            this.btnMon3 = new System.Windows.Forms.Button();
+            this.btnMon2 = new System.Windows.Forms.Button();
+            this.btnMon1 = new System.Windows.Forms.Button();
+            this.btnMon0 = new System.Windows.Forms.Button();
+            this.lblCurrentState = new System.Windows.Forms.Label();
+            this.grpMoves.SuspendLayout();
+            this.grpMons.SuspendLayout();
             this.SuspendLayout();
+            // 
+            // grpMoves
+            // 
+            this.grpMoves.Controls.Add(this.btnMove3);
+            this.grpMoves.Controls.Add(this.btnMove2);
+            this.grpMoves.Controls.Add(this.btnMove1);
+            this.grpMoves.Controls.Add(this.btnMove0);
+            this.grpMoves.Location = new System.Drawing.Point(12, 12);
+            this.grpMoves.Name = "grpMoves";
+            this.grpMoves.Size = new System.Drawing.Size(169, 81);
+            this.grpMoves.TabIndex = 0;
+            this.grpMoves.TabStop = false;
+            this.grpMoves.Text = "Moves";
+            // 
+            // btnMove3
+            // 
+            this.btnMove3.Location = new System.Drawing.Point(87, 48);
+            this.btnMove3.Name = "btnMove3";
+            this.btnMove3.Size = new System.Drawing.Size(75, 23);
+            this.btnMove3.TabIndex = 0;
+            this.btnMove3.Text = "Move 3";
+            this.btnMove3.UseVisualStyleBackColor = true;
+            // 
+            // btnMove2
+            // 
+            this.btnMove2.Location = new System.Drawing.Point(6, 48);
+            this.btnMove2.Name = "btnMove2";
+            this.btnMove2.Size = new System.Drawing.Size(75, 23);
+            this.btnMove2.TabIndex = 0;
+            this.btnMove2.Text = "Move 2";
+            this.btnMove2.UseVisualStyleBackColor = true;
+            // 
+            // btnMove1
+            // 
+            this.btnMove1.Location = new System.Drawing.Point(87, 19);
+            this.btnMove1.Name = "btnMove1";
+            this.btnMove1.Size = new System.Drawing.Size(75, 23);
+            this.btnMove1.TabIndex = 0;
+            this.btnMove1.Text = "Move 1";
+            this.btnMove1.UseVisualStyleBackColor = true;
+            // 
+            // btnMove0
+            // 
+            this.btnMove0.Location = new System.Drawing.Point(6, 19);
+            this.btnMove0.Name = "btnMove0";
+            this.btnMove0.Size = new System.Drawing.Size(75, 23);
+            this.btnMove0.TabIndex = 0;
+            this.btnMove0.Text = "Move 0";
+            this.btnMove0.UseVisualStyleBackColor = true;
+            // 
+            // grpMons
+            // 
+            this.grpMons.Controls.Add(this.btnMon5);
+            this.grpMons.Controls.Add(this.btnMon4);
+            this.grpMons.Controls.Add(this.btnMon3);
+            this.grpMons.Controls.Add(this.btnMon2);
+            this.grpMons.Controls.Add(this.btnMon1);
+            this.grpMons.Controls.Add(this.btnMon0);
+            this.grpMons.Location = new System.Drawing.Point(12, 99);
+            this.grpMons.Name = "grpMons";
+            this.grpMons.Size = new System.Drawing.Size(169, 115);
+            this.grpMons.TabIndex = 1;
+            this.grpMons.TabStop = false;
+            this.grpMons.Text = "Pokemon";
+            // 
+            // btnMon5
+            // 
+            this.btnMon5.Location = new System.Drawing.Point(87, 77);
+            this.btnMon5.Name = "btnMon5";
+            this.btnMon5.Size = new System.Drawing.Size(75, 23);
+            this.btnMon5.TabIndex = 0;
+            this.btnMon5.Text = "Mon 5";
+            this.btnMon5.UseVisualStyleBackColor = true;
+            // 
+            // btnMon4
+            // 
+            this.btnMon4.Location = new System.Drawing.Point(6, 77);
+            this.btnMon4.Name = "btnMon4";
+            this.btnMon4.Size = new System.Drawing.Size(75, 23);
+            this.btnMon4.TabIndex = 0;
+            this.btnMon4.Text = "Mon 4";
+            this.btnMon4.UseVisualStyleBackColor = true;
+            // 
+            // btnMon3
+            // 
+            this.btnMon3.Location = new System.Drawing.Point(87, 48);
+            this.btnMon3.Name = "btnMon3";
+            this.btnMon3.Size = new System.Drawing.Size(75, 23);
+            this.btnMon3.TabIndex = 0;
+            this.btnMon3.Text = "Mon 3";
+            this.btnMon3.UseVisualStyleBackColor = true;
+            // 
+            // btnMon2
+            // 
+            this.btnMon2.Location = new System.Drawing.Point(6, 48);
+            this.btnMon2.Name = "btnMon2";
+            this.btnMon2.Size = new System.Drawing.Size(75, 23);
+            this.btnMon2.TabIndex = 0;
+            this.btnMon2.Text = "Mon 2";
+            this.btnMon2.UseVisualStyleBackColor = true;
+            // 
+            // btnMon1
+            // 
+            this.btnMon1.Location = new System.Drawing.Point(87, 19);
+            this.btnMon1.Name = "btnMon1";
+            this.btnMon1.Size = new System.Drawing.Size(75, 23);
+            this.btnMon1.TabIndex = 0;
+            this.btnMon1.Text = "Mon 1";
+            this.btnMon1.UseVisualStyleBackColor = true;
+            // 
+            // btnMon0
+            // 
+            this.btnMon0.Location = new System.Drawing.Point(6, 19);
+            this.btnMon0.Name = "btnMon0";
+            this.btnMon0.Size = new System.Drawing.Size(75, 23);
+            this.btnMon0.TabIndex = 0;
+            this.btnMon0.Text = "Mon 0";
+            this.btnMon0.UseVisualStyleBackColor = true;
+            // 
+            // lblCurrentState
+            // 
+            this.lblCurrentState.AutoSize = true;
+            this.lblCurrentState.Location = new System.Drawing.Point(18, 221);
+            this.lblCurrentState.Name = "lblCurrentState";
+            this.lblCurrentState.Size = new System.Drawing.Size(85, 13);
+            this.lblCurrentState.TabIndex = 2;
+            this.lblCurrentState.Text = "Game state: ???";
+            // 
+            // CrystalAiForm
+            // 
+            this.ClientSize = new System.Drawing.Size(241, 349);
+            this.Controls.Add(this.lblCurrentState);
+            this.Controls.Add(this.grpMons);
+            this.Controls.Add(this.grpMoves);
+            this.Name = "CrystalAiForm";
+            this.grpMoves.ResumeLayout(false);
+            this.grpMons.ResumeLayout(false);
             this.ResumeLayout(false);
             this.PerformLayout();
+
         }
+
     }
 }
