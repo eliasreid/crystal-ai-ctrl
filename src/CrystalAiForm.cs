@@ -80,8 +80,13 @@ namespace BizHawk.Tool.CrystalCtrl
         List<byte> ExpectedData = new List<byte> { 0x21, 0xA7, 0xD2 };
 
         const UInt16 InitBattleTrainer = 0x7594;
+        const UInt16 LoadEnemyMonRet = 0x6B37;
+        const UInt16 ExitBattle = 0x769e;
+        private CheckBox chkJoypadDisable;
+        //private bool battleModeChanged = false;
 
-        private bool battleModeChanged = false;
+        //TODO: can't assume we start out NOT in battle
+        private bool inBattle = false;
 
         public CrystalAiForm()
         {
@@ -105,14 +110,22 @@ namespace BizHawk.Tool.CrystalCtrl
 
             //In case of battlemode - good enough to read the value at the end of the frame
             //_maybeMemoryEventsAPI.AddWriteCallback((_, written_val, flags) => {
-            //    battleModeChanged = true;
+            //    //battleModeChanged = true;
             //    Console.WriteLine("BattleMode written");
             //}, BattleMode, "System Bus");
             //Switched to exec InitEnemyTrainer, because wBattleMode addr is re-used in Crystal
             _maybeMemoryEventsAPI.AddExecCallback((_, written_val, flags) => {
-                battleModeChanged = true;
+                //battleModeChanged = true;
+                inBattle = true;
                 Console.WriteLine("Init enemy trainer called");
             }, InitBattleTrainer, "System Bus");
+
+
+            _maybeMemoryEventsAPI.AddExecCallback((_, written_val, flags) => {
+                //battleModeChanged = true;
+                inBattle = false;
+                Console.WriteLine("Exit battle called");
+            }, ExitBattle, "System Bus");
 
 
             //This is to rewrite wCurPartyMon in LoadEnemyMonToSwitchTo before it is used
@@ -127,10 +140,26 @@ namespace BizHawk.Tool.CrystalCtrl
                 {
                     //TODO: pause emulation - Set up UI for move selection
                     Console.WriteLine("enemy selecting poke");
-                    _maybeClientAPI.Pause();
+                    //ChooseNextPokemon(0);
+                    //_maybeClientAPI.Pause();
+                    //_maybeMemAPI.WriteByte(CurPartyMon, 0);
+                }
+                else
+                {
+                    //Console.WriteLine("not a match");
                 }
 
             }, CurMonWriteAddress, "System Bus");
+
+            _maybeMemoryEventsAPI.AddExecCallback((_, _, _) =>
+            {
+                if (inBattle)
+                {
+                    Console.WriteLine("enemy poke loaded");
+
+                }
+                
+            }, LoadEnemyMonRet, "System Bus");
 
         }
 
@@ -193,6 +222,7 @@ namespace BizHawk.Tool.CrystalCtrl
             this.btnMon1 = new System.Windows.Forms.Button();
             this.btnMon0 = new System.Windows.Forms.Button();
             this.lblCurrentState = new System.Windows.Forms.Label();
+            this.chkJoypadDisable = new System.Windows.Forms.CheckBox();
             this.grpMoves.SuspendLayout();
             this.grpMons.SuspendLayout();
             this.SuspendLayout();
@@ -330,9 +360,21 @@ namespace BizHawk.Tool.CrystalCtrl
             this.lblCurrentState.TabIndex = 2;
             this.lblCurrentState.Text = "Game state: ???";
             // 
+            // chkJoypadDisable
+            // 
+            this.chkJoypadDisable.AutoSize = true;
+            this.chkJoypadDisable.Location = new System.Drawing.Point(30, 256);
+            this.chkJoypadDisable.Name = "chkJoypadDisable";
+            this.chkJoypadDisable.Size = new System.Drawing.Size(80, 17);
+            this.chkJoypadDisable.TabIndex = 3;
+            this.chkJoypadDisable.Text = "checkBox1";
+            this.chkJoypadDisable.UseVisualStyleBackColor = true;
+            this.chkJoypadDisable.CheckedChanged += new System.EventHandler(this.checkBox1_CheckedChanged);
+            // 
             // CrystalAiForm
             // 
             this.ClientSize = new System.Drawing.Size(241, 349);
+            this.Controls.Add(this.chkJoypadDisable);
             this.Controls.Add(this.lblCurrentState);
             this.Controls.Add(this.grpMons);
             this.Controls.Add(this.grpMoves);
@@ -346,6 +388,8 @@ namespace BizHawk.Tool.CrystalCtrl
 
         private void btnMon0_Click(object sender, EventArgs e)
         {
+            var execAddr = _maybeEmuAPI.GetRegister("PC");
+            Console.WriteLine($"Current PC {execAddr:X4}");
             ChooseNextPokemon(0);
             _maybeClientAPI.Unpause();
         }
@@ -378,6 +422,19 @@ namespace BizHawk.Tool.CrystalCtrl
         {
             ChooseNextPokemon(5);
             _maybeClientAPI.Unpause();
+        }
+
+        private void checkBox1_CheckedChanged(object sender, EventArgs e)
+        {
+            if (chkJoypadDisable.Checked)
+            {
+                //write to bit 4 6 or 7
+                _maybeMemAPI.WriteByte(0xCFBE, 0b00010000);
+            }
+            else
+            {
+                _maybeMemAPI.WriteByte(0xCFBE, 0);
+            }
         }
     }
 }
