@@ -87,6 +87,7 @@ namespace BizHawk.Tool.CrystalCtrl
         const UInt16 LoadEnemyMonRet = 0x6B37;
         const UInt16 ExitBattle = 0x769e;
         const UInt16 ParseEnemyAction = 0x67C1;
+        const UInt16 BattleMenu = 0x6139;
         private CheckBox chkJoypadDisable;
         //private bool battleModeChanged = false;
 
@@ -137,7 +138,6 @@ namespace BizHawk.Tool.CrystalCtrl
 
 
             //This is to rewrite wCurPartyMon in LoadEnemyMonToSwitchTo before it is used
-            //TODO: Should be a breakpoint?
 
             _maybeMemoryEventsAPI.AddExecCallback((_, cbAddr, _) =>
             {
@@ -184,13 +184,28 @@ namespace BizHawk.Tool.CrystalCtrl
                         Console.WriteLine("Overwriting enemy move with chosen move");
                         _maybeMemAPI.WriteByte(EnemyCurrentMove, enemyMoves[chosenMove.Value], "System Bus");
                         _maybeMemAPI.WriteByte(EnemyCurrentMoveNum, (uint)chosenMove.Value, "System Bus");
+                        chosenMove = null;
                     }
-                    //Read in move IDs from list
-                    enemyMoves = _maybeMemAPI.ReadByteRange(EnemyMonMoves, 4, "System Bus");
-                    setupMoveButtons(enemyMoves);
+                    else
+                    {
+                        Console.WriteLine("No move override selected, going with AI generated move");
+                    }
                 }
 
             }, ParseEnemyAction, "System Bus");
+
+            _maybeMemoryEventsAPI.AddExecCallback((_, _, _) =>
+            {
+                //If Enemy has not yet chosen a move
+                //TODO: OR SWITCH / ITEM. ETC - ACTION
+                if (!chosenMove.HasValue)
+                {
+                    Console.WriteLine("Disabling input, waiting for opponent to select move");
+                    InputDisable(true);
+                }
+                //TODO: ideally we only disable input AFTER user has selected an action
+                //That is, intercept their action, cancel it, they run it after enemy has selected a move
+            }, BattleMenu, "System Bus");
 
         }
 
@@ -200,6 +215,7 @@ namespace BizHawk.Tool.CrystalCtrl
             //TODO: Check assumption that there's always one move
             //TODO: put buttons in a list to simply function
             //Console.WriteLine($"Hexadecimal value of {letter} is {value:X}")
+            Console.WriteLine("Setting up move buttons");
             chosenMove = null;
             foreach (Control ctrl in grpMoves.Controls)
             {
@@ -270,6 +286,11 @@ namespace BizHawk.Tool.CrystalCtrl
                     break;
             }
 		}
+
+        private void InputDisable(bool en)
+        {
+            _maybeMemAPI.WriteByte(0xCFBE, en ? (uint)0b00010000 : 0);
+        }
 
         private void InitializeComponent()
         {
@@ -485,7 +506,7 @@ namespace BizHawk.Tool.CrystalCtrl
             _maybeClientAPI.Unpause();
         }
 
-        private void btnMon4_Click(object sender, EventArgs e)
+        private void btnMon4_Click(object sender, EventArgs e)  
         {
             ChooseNextPokemon(4);
             _maybeClientAPI.Unpause();
@@ -499,35 +520,33 @@ namespace BizHawk.Tool.CrystalCtrl
 
         private void checkBox1_CheckedChanged(object sender, EventArgs e)
         {
-            if (chkJoypadDisable.Checked)
-            {
-                //write to bit 4 6 or 7
-                _maybeMemAPI.WriteByte(0xCFBE, 0b00010000);
-            }
-            else
-            {
-                _maybeMemAPI.WriteByte(0xCFBE, 0);
-            }
+            InputDisable(chkJoypadDisable.Checked);
+        }
+
+        private void ChooseMove(int index)
+        {
+            chosenMove = index;
+            InputDisable(false);
         }
 
         private void btnMove0_Click(object sender, EventArgs e)
         {
-            chosenMove = 0;
+            ChooseMove(0);
         }
 
         private void btnMove1_Click(object sender, EventArgs e)
         {
-            chosenMove = 1;
+            ChooseMove(1);
         }
 
         private void btnMove2_Click(object sender, EventArgs e)
         {
-            chosenMove = 2;
+            ChooseMove(2);
         }
 
         private void btnMove3_Click(object sender, EventArgs e)
         {
-            chosenMove = 3;
+            ChooseMove(3);
         }
     }
 }
