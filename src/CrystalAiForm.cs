@@ -88,6 +88,7 @@ namespace BizHawk.Tool.CrystalCtrl
         const UInt16 ExitBattle = 0x769e;
         const UInt16 ParseEnemyAction = 0x67C1;
         const UInt16 BattleMenu = 0x6139;
+        const UInt16 SwitchOrTryItemOk = 0x4032;
         private CheckBox chkJoypadDisable;
         //private bool battleModeChanged = false;
 
@@ -97,13 +98,17 @@ namespace BizHawk.Tool.CrystalCtrl
         private int? chosenMove = null;
         private List<byte> enemyMoves;
 
+        //Data for switching logic
+        //Trainer class has to be modifiy temporarily to simplify forcing enemy to switch
+        private uint savedTrainerClass = 0;
+        const UInt16 TrainerClass = 0xD233;
+
         public CrystalAiForm()
         {
             Text = "Hello, world!";
             SuspendLayout();
             Controls.Add(new LabelEx { Text = "loaded" });
             InitializeComponent();
-            MemoryCallbackFlags flags;
 
             //How to get core / rom loaded callback
 
@@ -134,7 +139,22 @@ namespace BizHawk.Tool.CrystalCtrl
                 //battleModeChanged = true;
                 inBattle = false;
                 Console.WriteLine("Exit battle called");
-            }, ExitBattle, "System Bus");
+            }, ExitBattle, "System Bus");            
+
+            _maybeMemoryEventsAPI.AddExecCallback((_, _, _) => {
+            if (inBattle && _maybeMemAPI.ReadByte(0xff9d, "System Bus") == 14)
+            {
+                Console.WriteLine($"Try switch / item ok label - try to write next opcode to garbage.");
+                //Write swtich mon to 1
+                _maybeMemAPI.WriteByte(0xc718, 1);
+
+                //Trying manual Jump - not sure if this will actually work
+                //DOES NOT WORK IN THIS EMU
+                _maybeMemAPI.WriteByteRange(SwitchOrTryItemOk + 1, new List<byte>{0xc3, 0x11, 0x11}, "System Bus");
+                    //_maybeEmuAPI.SetRegister("PC", 0x444b);
+
+                }
+            }, SwitchOrTryItemOk, "System Bus");
 
 
             //This is to rewrite wCurPartyMon in LoadEnemyMonToSwitchTo before it is used
