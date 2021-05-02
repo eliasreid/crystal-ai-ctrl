@@ -97,7 +97,6 @@ namespace BizHawk.Tool.CrystalCtrl
 
         //Game constants
         const uint BattleMode = 0xD22D;
-        UInt16 CurMonWriteAddress = 0x56CE;
         UInt16 CurPartyMon = 0xD109;
         UInt16 EnemyMonMoves = 0xd208;
         List<byte> ExpectedData = new List<byte> { 0x21, 0xA7, 0xD2 };
@@ -107,7 +106,12 @@ namespace BizHawk.Tool.CrystalCtrl
 
         UInt16 LoadEnemyMonToSwitchTo = 0x56CA;
 
+        const UInt16 OTPartyMon1Species = 0xd288;
+        const UInt16 BattleStructSize = 48;
+        const UInt16 OTPartyCount = 0xd280;
+
         const UInt16 InitBattleTrainer = 0x7594;
+        //end of function (0f:68eb LoadEnemyMon)
         const UInt16 LoadEnemyMonRet = 0x6B37;
         const UInt16 ExitBattle = 0x769e;
         const UInt16 ParseEnemyAction = 0x67C1;
@@ -120,7 +124,7 @@ namespace BizHawk.Tool.CrystalCtrl
 
         //TOOD: inBattle should be "controllingBattle" - thta way we can start with false, even if start in middle of battle, 
         //Will just start working on next battle
-        private bool inBattle = false;
+        private bool enemyCtrlActive = false;
 
         private int? chosenMove = null;
         private List<byte> enemyMoves;
@@ -131,6 +135,8 @@ namespace BizHawk.Tool.CrystalCtrl
         const UInt16 TrainerClass = 0xD233;
         const UInt16 EnemySwitchMonIndex = 0xc718;
         const UInt16 AiTrySwitch = 0x444B;
+
+        const UInt16 ReadTrainerPartyDone = 0x57d0;
 
         public CrystalAiForm()
         {
@@ -156,19 +162,19 @@ namespace BizHawk.Tool.CrystalCtrl
             //set inBattle flag when enemy trainer is inited
             //TODO: eventually meaning will change - only set inBattle if enemy is being controlled by net / ui, etc
             _maybeMemoryEventsAPI.AddExecCallback((_, _, _) => {
-                inBattle = true;
+                enemyCtrlActive = true;
                 Console.WriteLine("Init enemy trainer called");
             }, InitBattleTrainer, "System Bus");
 
             _maybeMemoryEventsAPI.AddExecCallback((_, _, _) => {
-                inBattle = false;
+                enemyCtrlActive = false;
                 Console.WriteLine("Exit battle called");
             }, ExitBattle, "System Bus");            
 
             _maybeMemoryEventsAPI.AddExecCallback((_, _, _) => {
 
                 //TODO: only enter statement if pokemon was selected by enemy - use nullable int like with move selection
-                if (inBattle && _maybeMemAPI.ReadByte(RomBank, "System Bus") == 0x0E)
+                if (enemyCtrlActive && _maybeMemAPI.ReadByte(RomBank, "System Bus") == 0x0E)
                 {
                     //Try jumping to AI_TrySwitch with wEnemySwitchMonIndexSet
                     _maybeEmuAPI.SetRegister("PC", AiTrySwitch);
@@ -181,49 +187,26 @@ namespace BizHawk.Tool.CrystalCtrl
             }, SwitchOrTryItemOk, "System Bus");
 
             _maybeMemoryEventsAPI.AddExecCallback((_, _, _) => {
-                if (inBattle && _maybeMemAPI.ReadByte(RomBank, "System Bus") == 0x0E)
+                if (enemyCtrlActive && _maybeMemAPI.ReadByte(RomBank, "System Bus") == 0x0E)
                 {
                     Console.WriteLine("Executing .ok + 1, SHOULD NOT HAPPEN IF PC JUMP IS WORKING");
                 }
             }, SwitchOrTryItemOk + 1, "System Bus");
 
-
-            //This is to rewrite wCurPartyMon in LoadEnemyMonToSwitchTo before it is used
-            //TODO: delete this?
-            _maybeMemoryEventsAPI.AddExecCallback((_, cbAddr, _) =>
-            {
-
-                //Reading bytes at the program counter location and comparing with data I know should be there
-                //This is a hacky way to make sure we're in the correct ROM bank
-                var bytes = _maybeMemAPI.ReadByteRange(CurMonWriteAddress, 3, "System Bus");
-                if (bytes.SequenceEqual(ExpectedData))
-                {
-                    //TODO: Pause doesn't work as expected - so have to have pre-written value for which pokemon to select
-                    // at this point.
-                    //Need to read in party in previous callback.
-                    Console.WriteLine("enemy selecting poke");
-                    //ChooseNextPokemon(0);
-                    //_maybeClientAPI.Pause();
-                    //_maybeMemAPI.WriteByte(CurPartyMon, 0);
-                }
-                else
-                {
-                    //Console.WriteLine("not a match");
-                }
-
-            }, CurMonWriteAddress, "System Bus");
-
             //Executed when new enemy pokmeon is switched in
+
             _maybeMemoryEventsAPI.AddExecCallback((_, _, _) =>
             {
-                if (inBattle)
+                if (enemyCtrlActive)
                 {
                     Console.WriteLine("enemy poke loaded");
                     //Read in move IDs from list
                     enemyMoves = _maybeMemAPI.ReadByteRange(EnemyMonMoves, 4, "System Bus");
                     setupMoveButtons(enemyMoves);
 
-                    //TODO: Figure out available switches (not yet figured out)
+                    //TODO: Figure out available switches
+                    
+                    //flag which pokemon are available for switching
 
                     //setupSwitchButtons();
                 }
@@ -234,7 +217,7 @@ namespace BizHawk.Tool.CrystalCtrl
             _maybeMemoryEventsAPI.AddExecCallback((_, _, _) =>
             {
                 //TOOD: check if flag is needed
-                if (inBattle)
+                if (enemyCtrlActive)
                 {
                     Console.WriteLine("Parsing enemy action");
                     if (chosenMove.HasValue)
@@ -275,12 +258,35 @@ namespace BizHawk.Tool.CrystalCtrl
             {
                 //write register b to 0x01
                 //TODO: check for variable "enemyNextMon" (different from switchMon)
-                if(inBattle && _maybeMemAPI.ReadByte(RomBank, "System Bus") == 0x0F)
+                if(enemyCtrlActive && _maybeMemAPI.ReadByte(RomBank, "System Bus") == 0x0F)
                 {
-                    Console.WriteLine("in LoadEnemyMonToSwitchTo callback, writing register B");
-                    _maybeEmuAPI.SetRegister("B", 0x01);
+                    Console.WriteLine("in LoadEnemyMonToSwitchTo callback");
+                    
+                    //_maybeEmuAPI.SetRegister("B", 0x01);
                 }
             }, LoadEnemyMonToSwitchTo, "System Bus");
+
+            //when trainer party is finished being read (wOTParty___ stuff addresses should be loaded)
+            _maybeMemoryEventsAPI.AddExecCallback((_, _, _) =>
+            {
+                //write register b to 0x01
+                //TODO: check for variable "enemyNextMon" (different from switchMon)
+                if (enemyCtrlActive && _maybeMemAPI.ReadByte(RomBank, "System Bus") == 0x0E)
+                {
+                    var partyCount = _maybeMemAPI.ReadByte(OTPartyCount, "System Bus");
+
+                    //TODO: maybe better to single byte range, rather than multiple API calls?
+                    List<byte> partyMonIDs = new List<byte>();
+                    for (uint i = 0; i < partyCount; i++)
+                    {
+                        var monID = (byte)_maybeMemAPI.ReadByte(OTPartyMon1Species + BattleStructSize * i, "System Bus");
+                        partyMonIDs.Add(monID);
+                    }
+                    Console.WriteLine($"in ReadTrainerPartyDone callback, enemy party (decimal IDs): {String.Join(",", partyMonIDs)}");
+                    setupMonButtons(partyMonIDs);
+
+                }
+            }, ReadTrainerPartyDone, "System Bus");
 
         }
 
@@ -316,6 +322,50 @@ namespace BizHawk.Tool.CrystalCtrl
             }
             btnMove3.Text = $"{moveIds[3]:X}";
             btnMove3.Enabled = true;
+        }
+
+        private void setupMonButtons(List<byte> monIDs)
+        {
+            Console.WriteLine("setting up enemy buttons");
+            foreach (Control ctrl in grpMons.Controls)
+            {
+                ctrl.Enabled = false;
+            }
+            btnMon0.Text = $"{monIDs[0]:X}";
+            btnMon0.Enabled = true;
+
+            if(monIDs.Count < 2)
+            {
+                return;
+            }
+
+            btnMon1.Text = $"{monIDs[1]:X}";
+            btnMon1.Enabled = true;
+            if (monIDs.Count < 3)
+            {
+                return;
+            }
+            btnMon2.Text = $"{monIDs[2]:X}";
+            btnMon2.Enabled = true;
+            if (monIDs.Count < 4)
+            {
+                return;
+            }
+            btnMon3.Text = $"{monIDs[3]:X}";
+            btnMon3.Enabled = true;
+            if (monIDs.Count < 5)
+            {
+                return;
+            }
+            btnMon4.Text = $"{monIDs[4]:X}";
+            btnMon4.Enabled = true;
+            if (monIDs.Count < 6)
+            {
+                return;
+            }
+            btnMon5.Text = $"{monIDs[5]:X}";
+            btnMon5.Enabled = true;
+            Console.WriteLine("setting up enemy buttons - end");
         }
 
         /// <summary>
