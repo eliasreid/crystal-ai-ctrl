@@ -127,6 +127,7 @@ namespace BizHawk.Tool.CrystalCtrl
         private bool enemyCtrlActive = false;
 
         private int? chosenMove = null;
+        private int? chosenMon = null;
         private List<byte> enemyMoves;
 
         //Data for switching logic
@@ -137,6 +138,8 @@ namespace BizHawk.Tool.CrystalCtrl
         const UInt16 AiTrySwitch = 0x444B;
 
         const UInt16 ReadTrainerPartyDone = 0x57d0;
+
+        bool inputDisabled = false;
 
         public CrystalAiForm()
         {
@@ -152,7 +155,6 @@ namespace BizHawk.Tool.CrystalCtrl
         /// Restart gets called after the apis are loaded - I think wasn't working before because of emulation not being started
         /// </summary>
         public void Restart() {
-
             Console.WriteLine("Restart called, available registers");
             foreach(KeyValuePair<string, ulong> entry in _maybeEmuAPI.GetRegisters())
             {
@@ -173,17 +175,17 @@ namespace BizHawk.Tool.CrystalCtrl
 
             _maybeMemoryEventsAPI.AddExecCallback((_, _, _) => {
 
-                //TODO: only enter statement if pokemon was selected by enemy - use nullable int like with move selection
-                if (enemyCtrlActive && _maybeMemAPI.ReadByte(RomBank, "System Bus") == 0x0E)
+                if (enemyCtrlActive && chosenMon.HasValue && _maybeMemAPI.ReadByte(RomBank, "System Bus") == 0x0E)
                 {
                     //Try jumping to AI_TrySwitch with wEnemySwitchMonIndexSet
                     _maybeEmuAPI.SetRegister("PC", AiTrySwitch);
 
-                    //Switch to pokemon 1 (pidgey?)
-                    //TOOD: change to selected pokemon
-                    _maybeMemAPI.WriteByte(EnemySwitchMonIndex, 0x02, "System Bus");
-                    Console.WriteLine($"Try switch / item ok label - try to manually jump PC to force switch.");
+                    //TOOD: make sure works, I think index is actually 1-6
+                    Console.WriteLine($"Switching mon to {chosenMon.Value}");
+                    _maybeMemAPI.WriteByte(EnemySwitchMonIndex,(uint)chosenMon.Value + 1, "System Bus");
+                    chosenMon = null;
                 }
+
             }, SwitchOrTryItemOk, "System Bus");
 
             _maybeMemoryEventsAPI.AddExecCallback((_, _, _) => {
@@ -222,6 +224,7 @@ namespace BizHawk.Tool.CrystalCtrl
                     Console.WriteLine("Parsing enemy action");
                     if (chosenMove.HasValue)
                     {
+                        //TODO: So I also have to force enemy AI NOT to use item or swi
                         Console.WriteLine("Overwriting enemy move with chosen move");
                         _maybeMemAPI.WriteByte(EnemyCurrentMove, enemyMoves[chosenMove.Value], "System Bus");
                         _maybeMemAPI.WriteByte(EnemyCurrentMoveNum, (uint)chosenMove.Value, "System Bus");
@@ -241,9 +244,9 @@ namespace BizHawk.Tool.CrystalCtrl
             {
                 //If Enemy has not yet chosen a move
                 //TODO: OR SWITCH / ITEM. ETC - ACTION
-                if (!chosenMove.HasValue)
+                if (enemyCtrlActive && !chosenMove.HasValue && !chosenMon.HasValue)
                 {
-                    Console.WriteLine("Disabling input, waiting for opponent to select move");
+                    Console.WriteLine("Disabling input, waiting for opponent to select action");
                     InputDisable(true);
                 }
                 //TODO: ideally we only disable input AFTER user has selected an action
@@ -256,13 +259,18 @@ namespace BizHawk.Tool.CrystalCtrl
             //Probably also when forced to switch for other reasons (like??)
             _maybeMemoryEventsAPI.AddExecCallback((_, _, _) =>
             {
-                //write register b to 0x01
-                //TODO: check for variable "enemyNextMon" (different from switchMon)
                 if(enemyCtrlActive && _maybeMemAPI.ReadByte(RomBank, "System Bus") == 0x0F)
                 {
-                    Console.WriteLine("in LoadEnemyMonToSwitchTo callback");
-                    
-                    //_maybeEmuAPI.SetRegister("B", 0x01);
+                    if (chosenMon.HasValue)
+                    {
+                        Console.WriteLine($"in LoadEnemyMonToSwitchTo callback, setting mon index to {chosenMon}");
+                        _maybeEmuAPI.SetRegister("B", chosenMon.Value);
+                        chosenMon = null;
+                    }
+                    else
+                    {
+                        Console.WriteLine($"ERROR: in LoadEnemyMonToSwitchTo callback, chosenMon null (going with AI decision)");
+                    }
                 }
             }, LoadEnemyMonToSwitchTo, "System Bus");
 
@@ -324,6 +332,7 @@ namespace BizHawk.Tool.CrystalCtrl
             btnMove3.Enabled = true;
         }
 
+        //takes in list of pokemon IDs for enemy party.
         private void setupMonButtons(List<byte> monIDs)
         {
             Console.WriteLine("setting up enemy buttons");
@@ -368,22 +377,19 @@ namespace BizHawk.Tool.CrystalCtrl
             Console.WriteLine("setting up enemy buttons - end");
         }
 
-        /// <summary>
-        /// Must be valid index based on available mons.
-        /// Emulation should be paused on CurMonWriteAddress
-        /// </summary>
-        /// <param name="partyIndex"></param>
-        private void ChooseNextPokemon(byte partyIndex)
-        {
-            _maybeMemAPI.WriteByte(CurPartyMon, partyIndex);
-        }
-
 		public bool AskSaveChanges() => true;
 
 		public void UpdateValues(ToolFormUpdateType type)
 		{
             switch (type)
             {
+                case ToolFormUpdateType.PreFrame:
+                    if (inputDisabled)
+                    {
+                        _maybeGuiAPI.Text(50, 50, "Waiting for enemy to select action");
+                    }
+                    
+                    break;
                 case ToolFormUpdateType.PostFrame:
                     //if (battleModeChanged)
                     //{
@@ -412,10 +418,10 @@ namespace BizHawk.Tool.CrystalCtrl
             }
 		}
 
-        private void InputDisable(bool en)
+        private void InputDisable(bool disable)
         {
-            //TODO: comment back in
-            //_maybeMemAPI.WriteByte(0xCFBE, en ? (uint)0b00010000 : 0);
+            inputDisabled = disable;
+            _maybeMemAPI.WriteByte(0xCFBE, disable ? (uint)0b00010000 : 0);
         }
 
         private void InitializeComponent()
@@ -605,48 +611,50 @@ namespace BizHawk.Tool.CrystalCtrl
 
         }
 
-        //TODO: btnMonN_Clicks should set some variable, that will be written to memory later on when poke is loaded
+        //TODO: btnMonN_Clicks should be used for two things:
+        // - choosing next pokemon, after a faint or start of match
+        // - chooisng next action (e.g. choosing to switch instead of using a move.
+
+        //I think can handle both with a chosenMon variable
         private void btnMon0_Click(object sender, EventArgs e)
         {
-            var execAddr = _maybeEmuAPI.GetRegister("PC");
-            Console.WriteLine($"Current PC {execAddr:X4}");
-            ChooseNextPokemon(0);
-            _maybeClientAPI.Unpause();
+            ChooseMon(0);
         }
 
         private void btnMon1_Click(object sender, EventArgs e)
         {
-            ChooseNextPokemon(1);
-            _maybeClientAPI.Unpause();
+            ChooseMon(1);
         }
 
         private void btnMon2_Click(object sender, EventArgs e)
         {
-            ChooseNextPokemon(2);
-            _maybeClientAPI.Unpause();
+            ChooseMon(2);
         }
 
         private void btnMon3_Click(object sender, EventArgs e)
         {
-            ChooseNextPokemon(3);
-            _maybeClientAPI.Unpause();
+            ChooseMon(3);
         }
 
         private void btnMon4_Click(object sender, EventArgs e)  
         {
-            ChooseNextPokemon(4);
-            _maybeClientAPI.Unpause();
+            ChooseMon(4);
         }
 
         private void btnMon5_Click(object sender, EventArgs e)
         {
-            ChooseNextPokemon(5);
-            _maybeClientAPI.Unpause();
+            ChooseMon(5);
         }
 
         private void checkBox1_CheckedChanged(object sender, EventArgs e)
         {
             InputDisable(chkJoypadDisable.Checked);
+        }
+
+        private void ChooseMon(int index)
+        {
+            chosenMon = index;
+            InputDisable(false);
         }
 
         private void ChooseMove(int index)
