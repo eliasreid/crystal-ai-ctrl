@@ -73,6 +73,28 @@ namespace BizHawk.Tool.CrystalCtrl
         //Mem domain System Bus
         //Mem domain CartRAM
 
+//register PCl : 25
+//register PCh : 2
+//register SPl : 248
+//register SPh : 255
+//register A : 62
+//register F : 160
+//register B : 78
+//register C : 62
+//register D : 221
+//register E : 0
+//register H : 255
+//register L : 15
+//register W : 252
+//register Z : 0
+//register PC : 537
+//register Flag I : 0
+//register Flag C : 0
+//register Flag H : 1
+//register Flag N : 0
+//register Flag Z : 1
+
+
         //Game constants
         const uint BattleMode = 0xD22D;
         UInt16 CurMonWriteAddress = 0x56CE;
@@ -93,6 +115,9 @@ namespace BizHawk.Tool.CrystalCtrl
         //private bool battleModeChanged = false;
 
         //TODO: can't assume we start out NOT in battle
+
+        //TOOD: inBattle should be "controllingBattle" - thta way we can start with false, even if start in middle of battle, 
+        //Will just start working on next battle
         private bool inBattle = false;
 
         private int? chosenMove = null;
@@ -110,8 +135,6 @@ namespace BizHawk.Tool.CrystalCtrl
             Controls.Add(new LabelEx { Text = "loaded" });
             InitializeComponent();
 
-            //How to get core / rom loaded callback
-
             ResumeLayout();
         }
 
@@ -120,7 +143,12 @@ namespace BizHawk.Tool.CrystalCtrl
         /// </summary>
         public void Restart() {
 
-            Console.WriteLine("Restart called");
+            Console.WriteLine("Restart called, available registers");
+            foreach(KeyValuePair<string, ulong> entry in _maybeEmuAPI.GetRegisters())
+            {
+                Console.WriteLine($"{entry.Key}");
+            }
+
 
             //In case of battlemode - good enough to read the value at the end of the frame
             //_maybeMemoryEventsAPI.AddWriteCallback((_, written_val, flags) => {
@@ -158,9 +186,10 @@ namespace BizHawk.Tool.CrystalCtrl
 
 
             //This is to rewrite wCurPartyMon in LoadEnemyMonToSwitchTo before it is used
-
+            //TODO: delete this?
             _maybeMemoryEventsAPI.AddExecCallback((_, cbAddr, _) =>
             {
+
                 //Reading bytes at the program counter location and comparing with data I know should be there
                 //This is a hacky way to make sure we're in the correct ROM bank
                 var bytes = _maybeMemAPI.ReadByteRange(CurMonWriteAddress, 3, "System Bus");
@@ -181,6 +210,7 @@ namespace BizHawk.Tool.CrystalCtrl
 
             }, CurMonWriteAddress, "System Bus");
 
+            //Executed when new enemy pokmeon is switched in
             _maybeMemoryEventsAPI.AddExecCallback((_, _, _) =>
             {
                 if (inBattle)
@@ -189,10 +219,15 @@ namespace BizHawk.Tool.CrystalCtrl
                     //Read in move IDs from list
                     enemyMoves = _maybeMemAPI.ReadByteRange(EnemyMonMoves, 4, "System Bus");
                     setupMoveButtons(enemyMoves);
+
+                    //TODO: Figure out available switches (not yet figured out)
+
+                    //setupSwitchButtons();
                 }
                 
             }, LoadEnemyMonRet, "System Bus");
 
+            //This is where enemy attack is re-written, if enemy selects an attack
             _maybeMemoryEventsAPI.AddExecCallback((_, _, _) =>
             {
                 //TOOD: check if flag is needed
@@ -214,6 +249,8 @@ namespace BizHawk.Tool.CrystalCtrl
 
             }, ParseEnemyAction, "System Bus");
 
+            //This is where the player enters their battle menu.
+            //Pause user input until enemy selects their action
             _maybeMemoryEventsAPI.AddExecCallback((_, _, _) =>
             {
                 //If Enemy has not yet chosen a move
@@ -309,7 +346,8 @@ namespace BizHawk.Tool.CrystalCtrl
 
         private void InputDisable(bool en)
         {
-            _maybeMemAPI.WriteByte(0xCFBE, en ? (uint)0b00010000 : 0);
+            //TODO: comment back in
+            //_maybeMemAPI.WriteByte(0xCFBE, en ? (uint)0b00010000 : 0);
         }
 
         private void InitializeComponent()
