@@ -105,6 +105,8 @@ namespace BizHawk.Tool.CrystalCtrl
         UInt16 EnemyCurrentMoveNum = 0xC6E9;
         UInt16 EnemyCurrentMove = 0xC6E4;
 
+        UInt16 LoadEnemyMonToSwitchTo = 0x56CA;
+
         const UInt16 InitBattleTrainer = 0x7594;
         const UInt16 LoadEnemyMonRet = 0x6B37;
         const UInt16 ExitBattle = 0x769e;
@@ -114,7 +116,7 @@ namespace BizHawk.Tool.CrystalCtrl
         private CheckBox chkJoypadDisable;
         //private bool battleModeChanged = false;
 
-        //TODO: can't assume we start out NOT in battle
+        const UInt16 RomBank = 0xff9d;
 
         //TOOD: inBattle should be "controllingBattle" - thta way we can start with false, even if start in middle of battle, 
         //Will just start working on next battle
@@ -127,6 +129,8 @@ namespace BizHawk.Tool.CrystalCtrl
         //Trainer class has to be modifiy temporarily to simplify forcing enemy to switch
         private uint savedTrainerClass = 0;
         const UInt16 TrainerClass = 0xD233;
+        const UInt16 EnemySwitchMonIndex = 0xc718;
+        const UInt16 AiTrySwitch = 0x444B;
 
         public CrystalAiForm()
         {
@@ -149,40 +153,39 @@ namespace BizHawk.Tool.CrystalCtrl
                 Console.WriteLine($"{entry.Key}");
             }
 
-
-            //In case of battlemode - good enough to read the value at the end of the frame
-            //_maybeMemoryEventsAPI.AddWriteCallback((_, written_val, flags) => {
-            //    //battleModeChanged = true;
-            //    Console.WriteLine("BattleMode written");
-            //}, BattleMode, "System Bus");
-            //Switched to exec InitEnemyTrainer, because wBattleMode addr is re-used in Crystal
-            _maybeMemoryEventsAPI.AddExecCallback((_, written_val, flags) => {
-                //battleModeChanged = true;
+            //set inBattle flag when enemy trainer is inited
+            //TODO: eventually meaning will change - only set inBattle if enemy is being controlled by net / ui, etc
+            _maybeMemoryEventsAPI.AddExecCallback((_, _, _) => {
                 inBattle = true;
                 Console.WriteLine("Init enemy trainer called");
             }, InitBattleTrainer, "System Bus");
 
-
-            _maybeMemoryEventsAPI.AddExecCallback((_, written_val, flags) => {
-                //battleModeChanged = true;
+            _maybeMemoryEventsAPI.AddExecCallback((_, _, _) => {
                 inBattle = false;
                 Console.WriteLine("Exit battle called");
             }, ExitBattle, "System Bus");            
 
             _maybeMemoryEventsAPI.AddExecCallback((_, _, _) => {
-            if (inBattle && _maybeMemAPI.ReadByte(0xff9d, "System Bus") == 14)
-            {
-                Console.WriteLine($"Try switch / item ok label - try to write next opcode to garbage.");
-                //Write swtich mon to 1
-                _maybeMemAPI.WriteByte(0xc718, 1);
 
-                //Trying manual Jump - not sure if this will actually work
-                //DOES NOT WORK IN THIS EMU
-                _maybeMemAPI.WriteByteRange(SwitchOrTryItemOk + 1, new List<byte>{0xc3, 0x11, 0x11}, "System Bus");
-                    //_maybeEmuAPI.SetRegister("PC", 0x444b);
+                //TODO: only enter statement if pokemon was selected by enemy - use nullable int like with move selection
+                if (inBattle && _maybeMemAPI.ReadByte(RomBank, "System Bus") == 0x0E)
+                {
+                    //Try jumping to AI_TrySwitch with wEnemySwitchMonIndexSet
+                    _maybeEmuAPI.SetRegister("PC", AiTrySwitch);
 
+                    //Switch to pokemon 1 (pidgey?)
+                    //TOOD: change to selected pokemon
+                    _maybeMemAPI.WriteByte(EnemySwitchMonIndex, 0x02, "System Bus");
+                    Console.WriteLine($"Try switch / item ok label - try to manually jump PC to force switch.");
                 }
             }, SwitchOrTryItemOk, "System Bus");
+
+            _maybeMemoryEventsAPI.AddExecCallback((_, _, _) => {
+                if (inBattle && _maybeMemAPI.ReadByte(RomBank, "System Bus") == 0x0E)
+                {
+                    Console.WriteLine("Executing .ok + 1, SHOULD NOT HAPPEN IF PC JUMP IS WORKING");
+                }
+            }, SwitchOrTryItemOk + 1, "System Bus");
 
 
             //This is to rewrite wCurPartyMon in LoadEnemyMonToSwitchTo before it is used
@@ -263,6 +266,21 @@ namespace BizHawk.Tool.CrystalCtrl
                 //TODO: ideally we only disable input AFTER user has selected an action
                 //That is, intercept their action, cancel it, they run it after enemy has selected a move
             }, BattleMenu, "System Bus");
+
+            //Executed when enemey pokemon is loading from party
+            //can rewrite register b to change party index 
+            //Only need to rewrite register here when battle starts (first mon), or when enemy mon faints, has to choose next pokemon
+            //Probably also when forced to switch for other reasons (like??)
+            _maybeMemoryEventsAPI.AddExecCallback((_, _, _) =>
+            {
+                //write register b to 0x01
+                //TODO: check for variable "enemyNextMon" (different from switchMon)
+                if(inBattle && _maybeMemAPI.ReadByte(RomBank, "System Bus") == 0x0F)
+                {
+                    Console.WriteLine("in LoadEnemyMonToSwitchTo callback, writing register B");
+                    _maybeEmuAPI.SetRegister("B", 0x01);
+                }
+            }, LoadEnemyMonToSwitchTo, "System Bus");
 
         }
 
