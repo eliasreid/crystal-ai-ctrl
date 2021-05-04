@@ -3,10 +3,14 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Windows.Forms;
 using System.Linq;
+using System.Net.WebSockets;
+using System.Threading.Tasks;
+using System.Threading;
 
 using BizHawk.Client.Common;
 using BizHawk.WinForms.Controls;
 using BizHawk.Emulation.Common;
+
 
 namespace BizHawk.Tool.CrystalCtrl
 
@@ -16,8 +20,6 @@ namespace BizHawk.Tool.CrystalCtrl
     [ExternalToolApplicability.SingleSystem(CoreSystem.GameBoy)]
     public sealed class CrystalAiForm : Form, IExternalToolForm
     {
-
-
 
         [RequiredApi]
         public ICommApi? _maybeCommAPI { get; set; }
@@ -136,10 +138,13 @@ namespace BizHawk.Tool.CrystalCtrl
         const UInt16 TrainerClass = 0xD233;
         const UInt16 EnemySwitchMonIndex = 0xc718;
         const UInt16 AiTrySwitch = 0x444B;
+        const UInt16 DontSwitchRet = 0x4044;
 
         const UInt16 ReadTrainerPartyDone = 0x57d0;
 
         bool inputDisabled = false;
+
+        ClientWebSocket ws = new ClientWebSocket();
 
         public CrystalAiForm()
         {
@@ -155,6 +160,12 @@ namespace BizHawk.Tool.CrystalCtrl
         /// Restart gets called after the apis are loaded - I think wasn't working before because of emulation not being started
         /// </summary>
         public void Restart() {
+
+            //connect to websocket server?
+            Task connect = ws.ConnectAsync(new System.Uri("ws://localhost:8999"), CancellationToken.None);
+            connect.Wait();
+            Task send = ws.SendAsync(new ArraySegment<byte>(System.Text.Encoding.UTF8.GetBytes("string")), WebSocketMessageType.Text, true, CancellationToken.None);
+
             Console.WriteLine("Restart called, available registers");
             foreach(KeyValuePair<string, ulong> entry in _maybeEmuAPI.GetRegisters())
             {
