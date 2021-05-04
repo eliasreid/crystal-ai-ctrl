@@ -175,15 +175,26 @@ namespace BizHawk.Tool.CrystalCtrl
 
             _maybeMemoryEventsAPI.AddExecCallback((_, _, _) => {
 
-                if (enemyCtrlActive && chosenMon.HasValue && _maybeMemAPI.ReadByte(RomBank, "System Bus") == 0x0E)
+                if (enemyCtrlActive && _maybeMemAPI.ReadByte(RomBank, "System Bus") == 0x0E)
                 {
-                    //Try jumping to AI_TrySwitch with wEnemySwitchMonIndexSet
-                    _maybeEmuAPI.SetRegister("PC", AiTrySwitch);
+                    if (chosenMon.HasValue)
+                    {
+                        //Try jumping to AI_TrySwitch with wEnemySwitchMonIndexSet
+                        _maybeEmuAPI.SetRegister("PC", AiTrySwitch);
 
-                    //TOOD: make sure works, I think index is actually 1-6
-                    Console.WriteLine($"Switching mon to {chosenMon.Value}");
-                    _maybeMemAPI.WriteByte(EnemySwitchMonIndex,(uint)chosenMon.Value + 1, "System Bus");
-                    chosenMon = null;
+                        //TOOD: make sure works, I think index is actually 1-6
+                        Console.WriteLine($"Switching mon to {chosenMon.Value}");
+                        _maybeMemAPI.WriteByte(EnemySwitchMonIndex, (uint)chosenMon.Value + 1, "System Bus");
+                        chosenMon = null;
+                    }else if (chosenMove.HasValue)
+                    {
+                        //Jump to return statement in DontSwitch - this is to ensure selected move doesn't get overwritten
+                        // AI choice to use item or switch
+                        Console.WriteLine($"Jumping to DontSwitchRet to ensure item / switch not used");
+                        _maybeEmuAPI.SetRegister("PC", DontSwitchRet);
+                        chosenMove = null;
+                    }
+
                 }
 
             }, SwitchOrTryItemOk, "System Bus");
@@ -269,6 +280,7 @@ namespace BizHawk.Tool.CrystalCtrl
                     }
                     else
                     {
+                        //TODO: only an "error" if switch action on turn
                         Console.WriteLine($"ERROR: in LoadEnemyMonToSwitchTo callback, chosenMon null (going with AI decision)");
                     }
                 }
