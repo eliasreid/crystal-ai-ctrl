@@ -143,7 +143,7 @@ namespace BizHawk.Tool.CrystalCtrl
         const UInt16 ReadTrainerPartyDone = 0x57d0;
 
         bool inputDisabled = false;
-
+        private Button btnConnect;
         ClientWebSocket ws = new ClientWebSocket();
 
         public CrystalAiForm()
@@ -160,11 +160,10 @@ namespace BizHawk.Tool.CrystalCtrl
         /// Restart gets called after the apis are loaded - I think wasn't working before because of emulation not being started
         /// </summary>
         public void Restart() {
-
             //connect to websocket server?
-            Task connect = ws.ConnectAsync(new System.Uri("ws://localhost:8999"), CancellationToken.None);
+            Task connect = ws.ConnectAsync(new System.Uri("ws://localhost:8999?type=emulator&id=42"), CancellationToken.None);
             connect.Wait();
-            Task send = ws.SendAsync(new ArraySegment<byte>(System.Text.Encoding.UTF8.GetBytes("string")), WebSocketMessageType.Text, true, CancellationToken.None);
+            Task send = ws.SendAsync(new ArraySegment<byte>(System.Text.Encoding.UTF8.GetBytes("data from emulator!")), WebSocketMessageType.Text, true, CancellationToken.None);
 
             Console.WriteLine("Restart called, available registers");
             foreach(KeyValuePair<string, ulong> entry in _maybeEmuAPI.GetRegisters())
@@ -463,6 +462,7 @@ namespace BizHawk.Tool.CrystalCtrl
             this.btnMon0 = new System.Windows.Forms.Button();
             this.lblCurrentState = new System.Windows.Forms.Label();
             this.chkJoypadDisable = new System.Windows.Forms.CheckBox();
+            this.btnConnect = new System.Windows.Forms.Button();
             this.grpMoves.SuspendLayout();
             this.grpMons.SuspendLayout();
             this.SuspendLayout();
@@ -619,9 +619,20 @@ namespace BizHawk.Tool.CrystalCtrl
             this.chkJoypadDisable.UseVisualStyleBackColor = true;
             this.chkJoypadDisable.CheckedChanged += new System.EventHandler(this.checkBox1_CheckedChanged);
             // 
+            // btnConnect
+            // 
+            this.btnConnect.Location = new System.Drawing.Point(18, 296);
+            this.btnConnect.Name = "btnConnect";
+            this.btnConnect.Size = new System.Drawing.Size(75, 23);
+            this.btnConnect.TabIndex = 4;
+            this.btnConnect.Text = "Connect";
+            this.btnConnect.UseVisualStyleBackColor = true;
+            this.btnConnect.Click += new System.EventHandler(this.btnConnect_Click);
+            // 
             // CrystalAiForm
             // 
             this.ClientSize = new System.Drawing.Size(241, 349);
+            this.Controls.Add(this.btnConnect);
             this.Controls.Add(this.chkJoypadDisable);
             this.Controls.Add(this.lblCurrentState);
             this.Controls.Add(this.grpMons);
@@ -704,6 +715,12 @@ namespace BizHawk.Tool.CrystalCtrl
         private void btnMove3_Click(object sender, EventArgs e)
         {
             ChooseMove(3);
+        }
+
+        private void btnConnect_Click(object sender, EventArgs e)
+        {
+            //Try to connect websocket
+            //Task connect = ws.ConnectAsync(new System.Uri("ws://localhost:8999"), CancellationToken.None);
         }
     }
 }
