@@ -10,6 +10,7 @@ using System.Threading;
 using BizHawk.Client.Common;
 using BizHawk.WinForms.Controls;
 using BizHawk.Emulation.Common;
+using CrystalAiCtrl;
 
 
 namespace BizHawk.Tool.CrystalCtrl
@@ -96,7 +97,6 @@ namespace BizHawk.Tool.CrystalCtrl
 //register Flag N : 0
 //register Flag Z : 1
 
-
         //Game constants
         const uint BattleMode = 0xD22D;
         UInt16 CurPartyMon = 0xD109;
@@ -144,7 +144,9 @@ namespace BizHawk.Tool.CrystalCtrl
 
         bool inputDisabled = false;
         private Button btnConnect;
-        ClientWebSocket ws = new ClientWebSocket();
+        //ClientWebSocket ws = new ClientWebSocket();
+
+        WsClient wsClient = new WsClient();
 
         public CrystalAiForm()
         {
@@ -160,10 +162,12 @@ namespace BizHawk.Tool.CrystalCtrl
         /// Restart gets called after the apis are loaded - I think wasn't working before because of emulation not being started
         /// </summary>
         public void Restart() {
-            //connect to websocket server?
-            Task connect = ws.ConnectAsync(new System.Uri("ws://localhost:8999?type=emulator&id=42"), CancellationToken.None);
-            connect.Wait();
-            Task send = ws.SendAsync(new ArraySegment<byte>(System.Text.Encoding.UTF8.GetBytes("data from emulator!")), WebSocketMessageType.Text, true, CancellationToken.None);
+
+            wsClient.MessageReceiveCallback((data) =>
+            {
+                Console.WriteLine($"message received in callback, size {data.Count}");
+            });
+
 
             Console.WriteLine("Restart called, available registers");
             foreach(KeyValuePair<string, ulong> entry in _maybeEmuAPI.GetRegisters())
@@ -204,20 +208,19 @@ namespace BizHawk.Tool.CrystalCtrl
                         _maybeEmuAPI.SetRegister("PC", DontSwitchRet);
                         chosenMove = null;
                     }
-
                 }
-
             }, SwitchOrTryItemOk, "System Bus");
 
+            //don't remeber why I added this
             _maybeMemoryEventsAPI.AddExecCallback((_, _, _) => {
                 if (enemyCtrlActive && _maybeMemAPI.ReadByte(RomBank, "System Bus") == 0x0E)
                 {
+                    //TODO: look into this
                     Console.WriteLine("Executing .ok + 1, SHOULD NOT HAPPEN IF PC JUMP IS WORKING");
                 }
             }, SwitchOrTryItemOk + 1, "System Bus");
 
             //Executed when new enemy pokmeon is switched in
-
             _maybeMemoryEventsAPI.AddExecCallback((_, _, _) =>
             {
                 if (enemyCtrlActive)
@@ -322,11 +325,13 @@ namespace BizHawk.Tool.CrystalCtrl
 
         private void setupMoveButtons(List<byte> moveIds)
         {
-            //TODO: maybe move ids to strings
+            //TODO: translate move hex codes into strings
             //TODO: Check assumption that there's always one move
             //TODO: put buttons in a list to simply function
-            //Console.WriteLine($"Hexadecimal value of {letter} is {value:X}")
             Console.WriteLine("Setting up move buttons");
+
+            //Check if connected to websocket, send JSON to server.
+
             chosenMove = null;
             foreach (Control ctrl in grpMoves.Controls)
             {
@@ -719,8 +724,22 @@ namespace BizHawk.Tool.CrystalCtrl
 
         private void btnConnect_Click(object sender, EventArgs e)
         {
-            //Try to connect websocket
-            //Task connect = ws.ConnectAsync(new System.Uri("ws://localhost:8999"), CancellationToken.None);
+            Console.WriteLine("connecting to ws");
+
+            var connectTask = wsClient.Connect(new Uri("ws://locaost:8999?type=emulator"));
+            connectTask.ContinueWith((task) =>
+            {
+                if (task.Result == WsClient.ConnectResult.Success)
+                {
+                    //Update GUI with link for client to connect
+                    Console.WriteLine($"connection to server success!");
+
+                }
+                else
+                {
+                    Console.WriteLine($"connection to server fail!");
+                }
+            });
         }
     }
 }
