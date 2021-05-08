@@ -20,7 +20,7 @@ namespace CrystalAiCtrl
             Failure
         }
 
-        ClientWebSocket ws = new ClientWebSocket();
+        ClientWebSocket? ws;
 
         Action<ArraySegment<byte>>? rxMessageCb = null;
         byte[] rxBuffer = new byte[4096];
@@ -31,9 +31,13 @@ namespace CrystalAiCtrl
         //Asynchronously connect, and return either error or session ID
         public async Task<ConnectResult> Connect(Uri uri)
         {
+            ws?.Dispose();
+
+            ws = new ClientWebSocket();
             Console.WriteLine("before ConnectAsync");
-            Task connectTask = ws.ConnectAsync(uri, CancellationToken.None);
-            if(await Task.WhenAny(connectTask, Task.Delay(5000)) == connectTask 
+            var cancel = new CancellationTokenSource();
+            Task connectTask = ws.ConnectAsync(uri, cancel.Token);
+            if(await Task.WhenAny(connectTask, Task.Delay(2000)) == connectTask 
                 && ws.State == WebSocketState.Open)
             {
                 Console.WriteLine("connection made, starting rx thread");
@@ -45,7 +49,7 @@ namespace CrystalAiCtrl
             {
                 //connection timed out
                 Console.WriteLine($"Failed to connect to server at {uri}");
-                ws.Dispose();
+                cancel.Cancel();
                 return ConnectResult.Failure;
             }
         }

@@ -168,7 +168,6 @@ namespace BizHawk.Tool.CrystalCtrl
                 Console.WriteLine($"message received in callback, size {data.Count}");
             });
 
-
             Console.WriteLine("Restart called, available registers");
             foreach(KeyValuePair<string, ulong> entry in _maybeEmuAPI.GetRegisters())
             {
@@ -726,7 +725,7 @@ namespace BizHawk.Tool.CrystalCtrl
         {
             Console.WriteLine("connecting to ws");
 
-            var connectTask = wsClient.Connect(new Uri("ws://locaost:8999?type=emulator"));
+            var connectTask = wsClient.Connect(new Uri("ws://localhost:8999?type=emulator"));
             connectTask.ContinueWith((task) =>
             {
                 if (task.Result == WsClient.ConnectResult.Success)
