@@ -6,12 +6,14 @@ using System.Linq;
 using System.Net.WebSockets;
 using System.Threading.Tasks;
 using System.Threading;
+using Newtonsoft.Json;
 
 using BizHawk.Client.Common;
 using BizHawk.WinForms.Controls;
 using BizHawk.Emulation.Common;
 using CrystalAiCtrl;
-
+using System.Text;
+using System.IO;
 
 namespace BizHawk.Tool.CrystalCtrl
 
@@ -144,6 +146,8 @@ namespace BizHawk.Tool.CrystalCtrl
 
         bool inputDisabled = false;
         private Button btnConnect;
+        private Button btnTestSend;
+
         //ClientWebSocket ws = new ClientWebSocket();
 
         WsClient wsClient = new WsClient();
@@ -156,6 +160,11 @@ namespace BizHawk.Tool.CrystalCtrl
             InitializeComponent();
 
             ResumeLayout();
+        }
+
+        protected override void OnFormClosing(FormClosingEventArgs e)
+        {
+            wsClient.Disconnect();
         }
 
         /// <summary>
@@ -362,6 +371,7 @@ namespace BizHawk.Tool.CrystalCtrl
         private void setupMonButtons(List<byte> monIDs)
         {
             Console.WriteLine("setting up enemy buttons");
+
             foreach (Control ctrl in grpMons.Controls)
             {
                 ctrl.Enabled = false;
@@ -467,6 +477,7 @@ namespace BizHawk.Tool.CrystalCtrl
             this.lblCurrentState = new System.Windows.Forms.Label();
             this.chkJoypadDisable = new System.Windows.Forms.CheckBox();
             this.btnConnect = new System.Windows.Forms.Button();
+            this.btnTestSend = new System.Windows.Forms.Button();
             this.grpMoves.SuspendLayout();
             this.grpMons.SuspendLayout();
             this.SuspendLayout();
@@ -633,9 +644,20 @@ namespace BizHawk.Tool.CrystalCtrl
             this.btnConnect.UseVisualStyleBackColor = true;
             this.btnConnect.Click += new System.EventHandler(this.btnConnect_Click);
             // 
+            // btnTestSend
+            // 
+            this.btnTestSend.Location = new System.Drawing.Point(106, 296);
+            this.btnTestSend.Name = "btnTestSend";
+            this.btnTestSend.Size = new System.Drawing.Size(75, 23);
+            this.btnTestSend.TabIndex = 4;
+            this.btnTestSend.Text = "Connect";
+            this.btnTestSend.UseVisualStyleBackColor = true;
+            this.btnTestSend.Click += new System.EventHandler(this.btnTestSend_Click);
+            // 
             // CrystalAiForm
             // 
             this.ClientSize = new System.Drawing.Size(241, 349);
+            this.Controls.Add(this.btnTestSend);
             this.Controls.Add(this.btnConnect);
             this.Controls.Add(this.chkJoypadDisable);
             this.Controls.Add(this.lblCurrentState);
@@ -732,7 +754,6 @@ namespace BizHawk.Tool.CrystalCtrl
                 {
                     //Update GUI with link for client to connect
                     Console.WriteLine($"connection to server success!");
-
                 }
                 else
                 {
@@ -740,5 +761,25 @@ namespace BizHawk.Tool.CrystalCtrl
                 }
             });
         }
+
+        private void btnTestSend_Click(object sender, EventArgs e)
+        {
+            //JSON 
+            StringBuilder sb = new StringBuilder();
+            StringWriter sw = new StringWriter(sb);
+
+            using (JsonWriter writer = new JsonTextWriter(sw))
+            {
+                writer.Formatting = Formatting.Indented;
+
+                writer.WriteStartObject();
+                writer.WritePropertyName("value");
+                writer.WriteValue(42);
+                writer.WriteEndObject();
+            }
+
+            wsClient.SendMessage(sb.ToString());
+        }
+
     }
 }

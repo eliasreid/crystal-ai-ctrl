@@ -26,6 +26,8 @@ namespace CrystalAiCtrl
         byte[] rxBuffer = new byte[4096];
         int rxBytes = 0;
 
+
+
         Thread? rxThread;
 
         //Asynchronously connect, and return either error or session ID
@@ -64,19 +66,19 @@ namespace CrystalAiCtrl
             rxMessageCb = msgHandler;
         }
 
-        public void SendMessage(ArraySegment<byte> sendData)
+        public void SendMessage(string sendData)
         {
+            var bytes = Encoding.UTF8.GetBytes(sendData);
             if(ws.State == WebSocketState.Open)
             {
                 //TODO: not sure if it's ok to block here, probably?
-                ws.SendAsync(sendData, WebSocketMessageType.Text, true, CancellationToken.None).Wait();
+                ws.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, CancellationToken.None).Wait();
             }
         }
 
         private void ReceiveThread()
         {
-            Console.WriteLine($"thread first line, connected? {ws.State == WebSocketState.Open}");
-            while (ws.State == WebSocketState.Open)
+            while (ws != null && ws.State == WebSocketState.Open)
             {
                 //add received data to end of buffer
                 Console.WriteLine("waiting for message..");
@@ -93,9 +95,18 @@ namespace CrystalAiCtrl
                     rxBytes = 0;
                 }
 
+                //TODO: handle close message received properly??
             }
         }
 
-
+        public void Disconnect()
+        {
+            //Disposing the websocket will cancel the blocking ReceiveAsync in the ReceiveThread
+            ws?.Dispose();
+            if (rxThread != null && rxThread.ThreadState != ThreadState.Unstarted)
+            {
+                rxThread.Join();
+            }
+        }
     }
 }
