@@ -1,16 +1,10 @@
 using System;
 using System.Collections.Generic;
-using System.Drawing;
 using System.Windows.Forms;
-using System.Linq;
-using System.Net.WebSockets;
-using System.Threading.Tasks;
-using System.Threading;
 using Newtonsoft.Json;
 
 using BizHawk.Client.Common;
 using BizHawk.WinForms.Controls;
-using BizHawk.Emulation.Common;
 using CrystalAiCtrl;
 using System.Text;
 using System.IO;

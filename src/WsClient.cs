@@ -1,6 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Threading;
@@ -33,7 +31,7 @@ namespace CrystalAiCtrl
         //Asynchronously connect, and return either error or session ID
         public async Task<ConnectResult> Connect(Uri uri)
         {
-            ws?.Dispose();
+            Disconnect();
 
             ws = new ClientWebSocket();
             Console.WriteLine("before ConnectAsync");
@@ -83,6 +81,23 @@ namespace CrystalAiCtrl
                 //add received data to end of buffer
                 Console.WriteLine("waiting for message..");
                 var rxTask = ws.ReceiveAsync(new ArraySegment<byte>(rxBuffer, rxBytes, rxBuffer.Length - rxBytes), CancellationToken.None);
+                //Just swallow exception here
+                try
+                {
+                    rxTask.Wait();
+                }
+                catch 
+                {
+                    //Just quit thread if exception is thrown.. Probably something more graceful we should do
+                    return;
+                }
+
+                if (!rxTask.IsCompleted)
+                {
+                    //Receive task was cancelled, only happens when we're joining thread, just return.
+                    return;
+                }
+
                 var rxResult = rxTask.Result;
                 rxBytes += rxResult.Count;
                 Console.WriteLine($"message received, size {rxResult.Count}, eom? {rxResult.EndOfMessage}");
