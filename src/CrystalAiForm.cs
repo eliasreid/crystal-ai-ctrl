@@ -1,12 +1,13 @@
 using System;
 using System.Collections.Generic;
-using System.Drawing;
 using System.Windows.Forms;
-using System.Linq;
+using Newtonsoft.Json;
 
 using BizHawk.Client.Common;
 using BizHawk.WinForms.Controls;
-using BizHawk.Emulation.Common;
+using CrystalAiCtrl;
+using System.Text;
+using System.IO;
 
 namespace BizHawk.Tool.CrystalCtrl
 
@@ -16,8 +17,6 @@ namespace BizHawk.Tool.CrystalCtrl
     [ExternalToolApplicability.SingleSystem(CoreSystem.GameBoy)]
     public sealed class CrystalAiForm : Form, IExternalToolForm
     {
-
-
 
         [RequiredApi]
         public ICommApi? _maybeCommAPI { get; set; }
@@ -94,7 +93,6 @@ namespace BizHawk.Tool.CrystalCtrl
 //register Flag N : 0
 //register Flag Z : 1
 
-
         //Game constants
         const uint BattleMode = 0xD22D;
         UInt16 CurPartyMon = 0xD109;
@@ -136,10 +134,17 @@ namespace BizHawk.Tool.CrystalCtrl
         const UInt16 TrainerClass = 0xD233;
         const UInt16 EnemySwitchMonIndex = 0xc718;
         const UInt16 AiTrySwitch = 0x444B;
+        const UInt16 DontSwitchRet = 0x4044;
 
         const UInt16 ReadTrainerPartyDone = 0x57d0;
 
         bool inputDisabled = false;
+        private Button btnConnect;
+        private Button btnTestSend;
+
+        //ClientWebSocket ws = new ClientWebSocket();
+
+        WsClient wsClient = new WsClient();
 
         public CrystalAiForm()
         {
@@ -151,10 +156,21 @@ namespace BizHawk.Tool.CrystalCtrl
             ResumeLayout();
         }
 
+        protected override void OnFormClosing(FormClosingEventArgs e)
+        {
+            wsClient.Disconnect();
+        }
+
         /// <summary>
         /// Restart gets called after the apis are loaded - I think wasn't working before because of emulation not being started
         /// </summary>
         public void Restart() {
+
+            wsClient.MessageReceiveCallback((data) =>
+            {
+                Console.WriteLine($"message received in callback, size {data.Count}");
+            });
+
             Console.WriteLine("Restart called, available registers");
             foreach(KeyValuePair<string, ulong> entry in _maybeEmuAPI.GetRegisters())
             {
@@ -194,20 +210,19 @@ namespace BizHawk.Tool.CrystalCtrl
                         _maybeEmuAPI.SetRegister("PC", DontSwitchRet);
                         chosenMove = null;
                     }
-
                 }
-
             }, SwitchOrTryItemOk, "System Bus");
 
+            //don't remeber why I added this
             _maybeMemoryEventsAPI.AddExecCallback((_, _, _) => {
                 if (enemyCtrlActive && _maybeMemAPI.ReadByte(RomBank, "System Bus") == 0x0E)
                 {
+                    //TODO: look into this
                     Console.WriteLine("Executing .ok + 1, SHOULD NOT HAPPEN IF PC JUMP IS WORKING");
                 }
             }, SwitchOrTryItemOk + 1, "System Bus");
 
             //Executed when new enemy pokmeon is switched in
-
             _maybeMemoryEventsAPI.AddExecCallback((_, _, _) =>
             {
                 if (enemyCtrlActive)
@@ -312,11 +327,13 @@ namespace BizHawk.Tool.CrystalCtrl
 
         private void setupMoveButtons(List<byte> moveIds)
         {
-            //TODO: maybe move ids to strings
+            //TODO: translate move hex codes into strings
             //TODO: Check assumption that there's always one move
             //TODO: put buttons in a list to simply function
-            //Console.WriteLine($"Hexadecimal value of {letter} is {value:X}")
             Console.WriteLine("Setting up move buttons");
+
+            //Check if connected to websocket, send JSON to server.
+
             chosenMove = null;
             foreach (Control ctrl in grpMoves.Controls)
             {
@@ -348,6 +365,7 @@ namespace BizHawk.Tool.CrystalCtrl
         private void setupMonButtons(List<byte> monIDs)
         {
             Console.WriteLine("setting up enemy buttons");
+
             foreach (Control ctrl in grpMons.Controls)
             {
                 ctrl.Enabled = false;
@@ -452,6 +470,8 @@ namespace BizHawk.Tool.CrystalCtrl
             this.btnMon0 = new System.Windows.Forms.Button();
             this.lblCurrentState = new System.Windows.Forms.Label();
             this.chkJoypadDisable = new System.Windows.Forms.CheckBox();
+            this.btnConnect = new System.Windows.Forms.Button();
+            this.btnTestSend = new System.Windows.Forms.Button();
             this.grpMoves.SuspendLayout();
             this.grpMons.SuspendLayout();
             this.SuspendLayout();
@@ -608,9 +628,31 @@ namespace BizHawk.Tool.CrystalCtrl
             this.chkJoypadDisable.UseVisualStyleBackColor = true;
             this.chkJoypadDisable.CheckedChanged += new System.EventHandler(this.checkBox1_CheckedChanged);
             // 
+            // btnConnect
+            // 
+            this.btnConnect.Location = new System.Drawing.Point(18, 296);
+            this.btnConnect.Name = "btnConnect";
+            this.btnConnect.Size = new System.Drawing.Size(75, 23);
+            this.btnConnect.TabIndex = 4;
+            this.btnConnect.Text = "Connect";
+            this.btnConnect.UseVisualStyleBackColor = true;
+            this.btnConnect.Click += new System.EventHandler(this.btnConnect_Click);
+            // 
+            // btnTestSend
+            // 
+            this.btnTestSend.Location = new System.Drawing.Point(106, 296);
+            this.btnTestSend.Name = "btnTestSend";
+            this.btnTestSend.Size = new System.Drawing.Size(75, 23);
+            this.btnTestSend.TabIndex = 4;
+            this.btnTestSend.Text = "Test Send";
+            this.btnTestSend.UseVisualStyleBackColor = true;
+            this.btnTestSend.Click += new System.EventHandler(this.btnTestSend_Click);
+            // 
             // CrystalAiForm
             // 
             this.ClientSize = new System.Drawing.Size(241, 349);
+            this.Controls.Add(this.btnTestSend);
+            this.Controls.Add(this.btnConnect);
             this.Controls.Add(this.chkJoypadDisable);
             this.Controls.Add(this.lblCurrentState);
             this.Controls.Add(this.grpMons);
@@ -694,5 +736,53 @@ namespace BizHawk.Tool.CrystalCtrl
         {
             ChooseMove(3);
         }
+
+        private void btnConnect_Click(object sender, EventArgs e)
+        {
+            Console.WriteLine("connecting to ws");
+
+            var connectTask = wsClient.Connect(new Uri("ws://localhost:8999?type=emulator"));
+            connectTask.ContinueWith((task) =>
+            {
+                if (task.Result == WsClient.ConnectResult.Success)
+                {
+                    //Update GUI with link for client to connect
+                    Console.WriteLine($"connection to server success!");
+                }
+                else
+                {
+                    Console.WriteLine($"connection to server fail!");
+                }
+            });
+        }
+
+        private void btnTestSend_Click(object sender, EventArgs e)
+        {
+            //JSON 
+            //StringBuilder sb = new StringBuilder();
+            //StringWriter sw = new StringWriter(sb);
+
+            //using (JsonWriter writer = new JsonTextWriter(sw))
+            //{
+            //    writer.Formatting = Formatting.Indented;
+
+            //    writer.WriteStartObject();
+            //    writer.WritePropertyName("value");
+            //    writer.WriteValue(42);
+            //    writer.WriteEndObject();
+            //}
+
+            //wsClient.SendMessage(sb.ToString());
+
+            BattleStartMsg startMsg = new BattleStartMsg();
+            startMsg.trainerInfo.trainerName = "name";
+            startMsg.trainerInfo.pokemonNames = new List<string> { "Pidgey", "Rattata" };
+
+            string json = JsonConvert.SerializeObject(startMsg, Formatting.None);
+            wsClient.SendMessage(json);
+            Console.WriteLine("sending: " + json);
+            
+        }
+
     }
 }
