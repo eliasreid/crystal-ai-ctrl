@@ -7,9 +7,15 @@ namespace Tests
     public class Tests
     {
         [TestMethod]
-        public void TestMethod1()
+        public void ExampleTestCase()
         {
-            Assert.AreEqual("hello", DataHelpers.hello());
+            Assert.AreEqual(3, DataHelpers.add(1, 2));
+        }
+
+        [TestMethod]
+        public void TestResource()
+        {
+            Assert.AreEqual("value", DataHelpers.PokemonNames[0]);
         }
     }
 }
