@@ -1,5 +1,7 @@
 /src/bin
 /src/obj
+/Tests/obj
+/Tests/bin
 /BizHawk
 *.gbc
 *.suo
