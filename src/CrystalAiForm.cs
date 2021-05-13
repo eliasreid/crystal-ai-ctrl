@@ -644,7 +644,7 @@ namespace BizHawk.Tool.CrystalCtrl
             this.btnTestSend.Name = "btnTestSend";
             this.btnTestSend.Size = new System.Drawing.Size(75, 23);
             this.btnTestSend.TabIndex = 4;
-            this.btnTestSend.Text = "Connect";
+            this.btnTestSend.Text = "Test Send";
             this.btnTestSend.UseVisualStyleBackColor = true;
             this.btnTestSend.Click += new System.EventHandler(this.btnTestSend_Click);
             // 
@@ -759,20 +759,29 @@ namespace BizHawk.Tool.CrystalCtrl
         private void btnTestSend_Click(object sender, EventArgs e)
         {
             //JSON 
-            StringBuilder sb = new StringBuilder();
-            StringWriter sw = new StringWriter(sb);
+            //StringBuilder sb = new StringBuilder();
+            //StringWriter sw = new StringWriter(sb);
 
-            using (JsonWriter writer = new JsonTextWriter(sw))
-            {
-                writer.Formatting = Formatting.Indented;
+            //using (JsonWriter writer = new JsonTextWriter(sw))
+            //{
+            //    writer.Formatting = Formatting.Indented;
 
-                writer.WriteStartObject();
-                writer.WritePropertyName("value");
-                writer.WriteValue(42);
-                writer.WriteEndObject();
-            }
+            //    writer.WriteStartObject();
+            //    writer.WritePropertyName("value");
+            //    writer.WriteValue(42);
+            //    writer.WriteEndObject();
+            //}
 
-            wsClient.SendMessage(sb.ToString());
+            //wsClient.SendMessage(sb.ToString());
+
+            BattleStartMsg startMsg = new BattleStartMsg();
+            startMsg.trainerInfo.trainerName = "name";
+            startMsg.trainerInfo.pokemonNames = new List<string> { "Pidgey", "Rattata" };
+
+            string json = JsonConvert.SerializeObject(startMsg, Formatting.None);
+            wsClient.SendMessage(json);
+            Console.WriteLine("sending: " + json);
+            
         }
 
     }
