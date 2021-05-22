@@ -8,20 +8,39 @@ using Newtonsoft.Json;
 namespace CrystalAiCtrl
 {
 
-    class MsgsCommon
+    public class MsgsCommon
     {
         public static readonly string battleStart = "battleStart";
+        public static readonly string chosenAction = "chosenAction";
+
+        public enum ActionType
+        {
+            useMove,
+            pokemonSwitch,
+            useItem
+        }
     };
 
-    class BattleStartMsg
+    public class BattleStartMsg
     {
         public readonly string msgType = MsgsCommon.battleStart;
         public TrainerInfo trainerInfo = new TrainerInfo();
     }
     
-    class TrainerInfo
+    public class TrainerInfo
     {
         public string trainerName = "";
         public List<string> pokemonNames = new List<string>();
+    }
+
+    public class ChosenAction 
+    {
+        public readonly string msgType = MsgsCommon.chosenAction;
+
+        //For now, only need to communicate this for the enemy actions
+        //action can be fully described by a type and index.
+        public MsgsCommon.ActionType actionType;
+        public int actionIndex;
+        
     }
 }
