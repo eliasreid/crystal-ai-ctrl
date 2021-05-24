@@ -12,6 +12,7 @@ namespace CrystalAiCtrl
     {
         public static readonly string battleStart = "battleStart";
         public static readonly string chosenAction = "chosenAction";
+        public static readonly string availableActions = "availableActions";
 
         public enum ActionType
         {
@@ -25,6 +26,20 @@ namespace CrystalAiCtrl
     {
         public readonly string msgType = MsgsCommon.battleStart;
         public TrainerInfo trainerInfo = new TrainerInfo();
+
+        public BattleStartMsg(){}
+
+        public BattleStartMsg(TrainerInfo trainerInfoIn){
+            trainerInfo = trainerInfoIn;
+        }
+    }
+
+    public class AvailableActionsMsg
+    {
+        public readonly string msgType = MsgsCommon.availableActions;
+        public List<string> moves = new List<string>();
+        public List<string> pokemon = new List<string>();
+        public List<string> items = new List<string>();
     }
     
     public class TrainerInfo
@@ -33,7 +48,7 @@ namespace CrystalAiCtrl
         public List<string> pokemonNames = new List<string>();
     }
 
-    public class ChosenAction 
+    public class ChosenActionMsg 
     {
         public readonly string msgType = MsgsCommon.chosenAction;
 
@@ -41,6 +56,6 @@ namespace CrystalAiCtrl
         //action can be fully described by a type and index.
         public MsgsCommon.ActionType actionType;
         public int actionIndex;
-        
     }
+
 }

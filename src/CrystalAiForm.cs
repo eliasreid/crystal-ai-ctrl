@@ -166,9 +166,28 @@ namespace BizHawk.Tool.CrystalCtrl
         /// </summary>
         public void Restart() {
 
-            wsClient.MessageReceiveCallback((data) =>
+            wsClient.MessageReceiveCallback( data =>
             {
-                Console.WriteLine($"message received in callback, size {data.Count}");
+                string msgString = Encoding.UTF8.GetString(data.Array, 0, data.Count);
+                Console.WriteLine($"message received from websocket: {msgString}");
+                try{
+                    //iterate over json fields until see "chosenAction" string
+                    //Probably better ways to check json for field before deserializing object.
+                    JsonTextReader reader = new JsonTextReader(new StringReader(msgString));
+                    while (reader.Read())
+                    {
+                        //not sure if this will work - better way would be to have a message 
+                        if (reader.Value != null && reader.Value.ToString() == MsgsCommon.chosenAction)
+                        {
+                            //handle chosen action message
+                            var chosenAction = JsonConvert.DeserializeObject<ChosenActionMsg>(msgString);
+                            handleChosenAction(chosenAction);
+                            
+                        }
+                    }
+                }catch(JsonReaderException e){
+                    Console.WriteLine($"Json parse exception {e.ToString()}");
+                }
             });
 
             Console.WriteLine("Restart called, available registers");
@@ -213,30 +232,35 @@ namespace BizHawk.Tool.CrystalCtrl
                 }
             }, SwitchOrTryItemOk, "System Bus");
 
-            //don't remeber why I added this
-            _maybeMemoryEventsAPI.AddExecCallback((_, _, _) => {
-                if (enemyCtrlActive && _maybeMemAPI.ReadByte(RomBank, "System Bus") == 0x0E)
-                {
-                    //TODO: look into this
-                    Console.WriteLine("Executing .ok + 1, SHOULD NOT HAPPEN IF PC JUMP IS WORKING");
-                }
-            }, SwitchOrTryItemOk + 1, "System Bus");
-
             //Executed when new enemy pokmeon is switched in
             _maybeMemoryEventsAPI.AddExecCallback((_, _, _) =>
             {
                 if (enemyCtrlActive)
                 {
                     Console.WriteLine("enemy poke loaded");
-                    //Read in move IDs from list
+                    //Read in move IDs from list - remove moves with id of 0 (represent empty move slots)
+                    // Making the assumption that empty move slots are always at the end...
                     enemyMoves = _maybeMemAPI.ReadByteRange(EnemyMonMoves, 4, "System Bus");
-                    setupMoveButtons(enemyMoves);
+                    for(int i = 0; i < enemyMoves.Count; i++){
+                        if(enemyMoves[i] == 0){
+                            //cut list off here
+                            enemyMoves.RemoveRange(i, enemyMoves.Count - i);
+                            break;
+                        }
+                    }
 
-                    //TODO: Figure out available switches
-                    
-                    //flag which pokemon are available for switching
+                    AvailableActionsMsg msg = new AvailableActionsMsg();
+                    foreach(byte moveId in enemyMoves){
+                        msg.moves.Add(Convert.ToString(moveId, 16));
+                    }
 
-                    //setupSwitchButtons();
+                    //TODO: read available pokemon to switch to.
+                    // Should be trivial to read from WRAM party data
+                    setupMoveButtons(msg.moves);
+                    //setupMonButtons(msg.pokemon)
+                    string json = JsonConvert.SerializeObject(msg, Formatting.None);
+                    wsClient.SendMessage(json);
+                    Console.WriteLine("sending: " + json);
                 }
                 
             }, LoadEnemyMonRet, "System Bus");
@@ -311,24 +335,28 @@ namespace BizHawk.Tool.CrystalCtrl
                     var partyCount = _maybeMemAPI.ReadByte(OTPartyCount, "System Bus");
 
                     //TODO: maybe better to single byte range, rather than multiple API calls?
-                    List<byte> partyMonIDs = new List<byte>();
+                    var availActions = new AvailableActionsMsg();
                     for (uint i = 0; i < partyCount; i++)
                     {
                         var monID = (byte)_maybeMemAPI.ReadByte(OTPartyMon1Species + BattleStructSize * i, "System Bus");
-                        partyMonIDs.Add(monID);
+                        //TODO: translate ID bytes to strings
+                        availActions.pokemon.Add(Convert.ToString(monID, 16));
                     }
-                    Console.WriteLine($"in ReadTrainerPartyDone callback, enemy party (decimal IDs): {String.Join(",", partyMonIDs)}");
-                    setupMonButtons(partyMonIDs);
+                    Console.WriteLine($"in ReadTrainerPartyDone callback, enemy party (decimal IDs): {String.Join(",", availActions.pokemon)}");
+
+                    //update GUI and send info to browser
+                    setupMonButtons(availActions.pokemon);
+                    string json = JsonConvert.SerializeObject(availActions, Formatting.None);
+                    wsClient.SendMessage(json);
+                    Console.WriteLine("sending: " + json);
 
                 }
             }, ReadTrainerPartyDone, "System Bus");
-
         }
 
-        private void setupMoveButtons(List<byte> moveIds)
+        private void setupMoveButtons(List<string> moveIds)
         {
-            //TODO: translate move hex codes into strings
-            //TODO: Check assumption that there's always one move
+            //TODO: translate move hex codes into strings (before enter this functino )
             //TODO: put buttons in a list to simply function
             Console.WriteLine("Setting up move buttons");
 
@@ -339,30 +367,37 @@ namespace BizHawk.Tool.CrystalCtrl
             {
                 ctrl.Enabled = false;
             }
-            btnMove0.Text = $"{moveIds[0]:X}";
+
+            if(moveIds.Count < 1)
+            {
+                return;
+            }
+            
+            btnMove0.Text = $"{moveIds[0]}";
             btnMove0.Enabled = true;
-            if(moveIds[1] == 0)
+
+            if(moveIds.Count < 2)
             {
                 return;
             }
-            btnMove1.Text = $"{moveIds[1]:X}";
+            btnMove1.Text = $"{moveIds[1]}";
             btnMove1.Enabled = true;
-            if (moveIds[2] == 0)
+            if (moveIds.Count < 3)
             {
                 return;
             }
-            btnMove2.Text = $"{moveIds[2]:X}";
+            btnMove2.Text = $"{moveIds[2]}";
             btnMove2.Enabled = true;
-            if (moveIds[3] == 0)
+            if (moveIds.Count < 4)
             {
                 return;
             }
-            btnMove3.Text = $"{moveIds[3]:X}";
+            btnMove3.Text = $"{moveIds[3]}";
             btnMove3.Enabled = true;
         }
 
         //takes in list of pokemon IDs for enemy party.
-        private void setupMonButtons(List<byte> monIDs)
+        private void setupMonButtons(List<string> monIDs)
         {
             Console.WriteLine("setting up enemy buttons");
 
@@ -370,7 +405,7 @@ namespace BizHawk.Tool.CrystalCtrl
             {
                 ctrl.Enabled = false;
             }
-            btnMon0.Text = $"{monIDs[0]:X}";
+            btnMon0.Text = $"{monIDs[0]}";
             btnMon0.Enabled = true;
 
             if(monIDs.Count < 2)
@@ -378,33 +413,32 @@ namespace BizHawk.Tool.CrystalCtrl
                 return;
             }
 
-            btnMon1.Text = $"{monIDs[1]:X}";
+            btnMon1.Text = $"{monIDs[1]}";
             btnMon1.Enabled = true;
             if (monIDs.Count < 3)
             {
                 return;
             }
-            btnMon2.Text = $"{monIDs[2]:X}";
+            btnMon2.Text = $"{monIDs[2]}";
             btnMon2.Enabled = true;
             if (monIDs.Count < 4)
             {
                 return;
             }
-            btnMon3.Text = $"{monIDs[3]:X}";
+            btnMon3.Text = $"{monIDs[3]}";
             btnMon3.Enabled = true;
             if (monIDs.Count < 5)
             {
                 return;
             }
-            btnMon4.Text = $"{monIDs[4]:X}";
+            btnMon4.Text = $"{monIDs[4]}";
             btnMon4.Enabled = true;
             if (monIDs.Count < 6)
             {
                 return;
             }
-            btnMon5.Text = $"{monIDs[5]:X}";
+            btnMon5.Text = $"{monIDs[5]}";
             btnMon5.Enabled = true;
-            Console.WriteLine("setting up enemy buttons - end");
         }
 
 		public bool AskSaveChanges() => true;
@@ -713,6 +747,7 @@ namespace BizHawk.Tool.CrystalCtrl
 
         private void ChooseMove(int index)
         {
+            Console.WriteLine($"choosing move {index}");
             chosenMove = index;
             InputDisable(false);
         }
@@ -781,8 +816,24 @@ namespace BizHawk.Tool.CrystalCtrl
             string json = JsonConvert.SerializeObject(startMsg, Formatting.None);
             wsClient.SendMessage(json);
             Console.WriteLine("sending: " + json);
-            
         }
 
+        //For handling moves chosen from browser client.
+        //TODO: maybe re-use this same function from lcoal UI buttons?
+        private void handleChosenAction(ChosenActionMsg chosenAction){
+            Console.WriteLine($"Handling chosen action: {chosenAction.actionType} {chosenAction.actionIndex}");
+            switch(chosenAction.actionType){
+                case MsgsCommon.ActionType.useMove:
+                    ChooseMove(chosenAction.actionIndex);
+                    break;
+                case MsgsCommon.ActionType.pokemonSwitch:
+                    ChooseMon(chosenAction.actionIndex);
+                    break;
+                case MsgsCommon.ActionType.useItem:
+                    //TODO: handle item
+                    break;
+            }
+        }
     }
+
 }

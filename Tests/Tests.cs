@@ -20,24 +20,23 @@ namespace Tests
             Assert.AreEqual("value", DataHelpers.PokemonNames[0]);
         }
 
-
         //msg tests
-        [TestMethod]
-        public void ParseBattleStart()
-        {
-            string json = @"{""msgType"":""battleStart"",
-                             ""trainerInfo"":{
-                                ""pokemonNames"":[""rat"", ""pidg"" ],
-                                ""trainerName"":""Youngster Joey""
-                              }
-                            }";
-            BattleStartMsg obj = JsonConvert.DeserializeObject<BattleStartMsg>(json);
-            BattleStartMsg gold_val = new BattleStartMsg(
-                new TrainerInfo("Youngster Joey", new List<string> { "rat", "pidg" })
-                );
-            //gold_val.trainerInfo.pokemonNames = new List<string> { "rat", "pidg" };
-            //gold_val.trainerInfo.trainerName = "Youngster Joey";
-            Assert.AreEqual(obj, gold_val);
-        }
+        // [TestMethod]
+        // public void ParseBattleStart()
+        // {
+        //     string json = @"{""msgType"":""battleStart"",
+        //                      ""trainerInfo"":{
+        //                         ""pokemonNames"":[""rat"", ""pidg"" ],
+        //                         ""trainerName"":""Youngster Joey""
+        //                       }
+        //                     }";
+        //     BattleStartMsg obj = JsonConvert.DeserializeObject<BattleStartMsg>(json);
+        //     BattleStartMsg gold_val = new BattleStartMsg(
+        //         new TrainerInfo("Youngster Joey", new List<string> { "rat", "pidg" })
+        //         );
+        //     //gold_val.trainerInfo.pokemonNames = new List<string> { "rat", "pidg" };
+        //     //gold_val.trainerInfo.trainerName = "Youngster Joey";
+        //     Assert.AreEqual(obj, gold_val);
+        // }
     }
 }
