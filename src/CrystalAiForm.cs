@@ -105,8 +105,12 @@ namespace BizHawk.Tool.CrystalCtrl
         UInt16 LoadEnemyMonToSwitchTo = 0x56CA;
 
         const UInt16 OTPartyMon1Species = 0xd288;
+        const UInt16 OTPartyMon1Status = 0xd2a8;
+
         const UInt16 BattleStructSize = 48;
         const UInt16 OTPartyCount = 0xd280;
+        //unused, delete?
+        const UInt16 OTPartyMon0 = 0xd281;
 
         const UInt16 InitBattleTrainer = 0x7594;
         //end of function (0f:68eb LoadEnemyMon)
@@ -250,6 +254,7 @@ namespace BizHawk.Tool.CrystalCtrl
                     }
 
                     AvailableActionsMsg msg = new AvailableActionsMsg();
+                    msg.pokemon = readEnemyParty();
                     foreach(byte moveId in enemyMoves){
                         msg.moves.Add(Convert.ToString(moveId, 16));
                     }
@@ -332,26 +337,81 @@ namespace BizHawk.Tool.CrystalCtrl
                 //TODO: check for variable "enemyNextMon" (different from switchMon)
                 if (enemyCtrlActive && _maybeMemAPI.ReadByte(RomBank, "System Bus") == 0x0E)
                 {
-                    var partyCount = _maybeMemAPI.ReadByte(OTPartyCount, "System Bus");
-
-                    //TODO: maybe better to single byte range, rather than multiple API calls?
-                    var availActions = new AvailableActionsMsg();
-                    for (uint i = 0; i < partyCount; i++)
-                    {
-                        var monID = (byte)_maybeMemAPI.ReadByte(OTPartyMon1Species + BattleStructSize * i, "System Bus");
-                        //TODO: translate ID bytes to strings
-                        availActions.pokemon.Add(Convert.ToString(monID, 16));
-                    }
-                    Console.WriteLine($"in ReadTrainerPartyDone callback, enemy party (decimal IDs): {String.Join(",", availActions.pokemon)}");
+                    var partyInfo = readEnemyParty();
 
                     //update GUI and send info to browser
-                    setupMonButtons(availActions.pokemon);
+                    setupMonButtons(partyInfo);
+                    //only pokemon selection is available (no moves or items)
+                    AvailableActionsMsg availActions = new AvailableActionsMsg();
+                    availActions.pokemon = partyInfo;
                     string json = JsonConvert.SerializeObject(availActions, Formatting.None);
                     wsClient.SendMessage(json);
                     Console.WriteLine("sending: " + json);
 
                 }
             }, ReadTrainerPartyDone, "System Bus");
+        }
+
+        private List<MsgsCommon.MonInfo> readEnemyParty(){
+            //Read enemy party pokemon names - already doing this in another piece of code (above)
+
+            var partyCount = _maybeMemAPI.ReadByte(OTPartyCount, "System Bus");
+
+            //TODO: maybe better to single byte range, rather than multiple API calls?
+            var availActions = new AvailableActionsMsg();
+            var partyInfo = new List<MsgsCommon.MonInfo>();
+            for (uint i = 0; i < partyCount; i++)
+            {
+                var monID = (byte)_maybeMemAPI.ReadByte(OTPartyMon1Species + BattleStructSize * i, "System Bus");
+                var statusFlags = (byte)_maybeMemAPI.ReadByte(OTPartyMon1Status + BattleStructSize * i, "System Bus");
+                MsgsCommon.Status status = readStatusFlags(statusFlags);
+                //TODO: check if pokemon is fainted, to override status condition.
+                //TODO: translate ID bytes to proper names (using resource file)
+                partyInfo.Add(new MsgsCommon.MonInfo(Convert.ToString(monID, 16), status));
+            }
+            Console.WriteLine("Read enemy party");
+            foreach(var mon in partyInfo){
+                Console.WriteLine($"name: {mon.name}, status: {mon.status}");
+            }
+            return partyInfo;
+        }
+
+        //
+        private static MsgsCommon.Status readStatusFlags(byte statusFlags){
+            // Looks like psn burn, frz, par are single bits, but sleep is 3 bits 
+            //TODO: I think looks like this - need to confirm.
+            //    p  f  b psn slp slp slp
+            // b  b  b  b  b  b  b  b 
+
+            //         ; status condition bit flags
+            // SLP EQU %111 ; 0-7 turns
+            // 	const_def 3
+            // 	const PSN
+            // 	const BRN
+            // 	const FRZ
+            // 	const PAR
+            byte sleepmask = 0b00000111;
+            byte psnmask = 0b00001000;
+            byte brnmask = 0b00010000;
+            byte frzmask = 0b00100000;
+            byte parmask = 0b01000000;
+            
+            if((sleepmask & statusFlags) != 0){
+                return MsgsCommon.Status.sleep;
+            }
+            if((psnmask & statusFlags) != 0){
+                return MsgsCommon.Status.poisoned;
+            }
+            if((brnmask & statusFlags) != 0){
+                return MsgsCommon.Status.burned;
+            }
+            if((frzmask & statusFlags) != 0){
+                return MsgsCommon.Status.frozen;
+            }
+            if((parmask & statusFlags) != 0){
+                return MsgsCommon.Status.paralyzed;
+            }
+            return MsgsCommon.Status.none;
         }
 
         private void setupMoveButtons(List<string> moveIds)
@@ -397,15 +457,15 @@ namespace BizHawk.Tool.CrystalCtrl
         }
 
         //takes in list of pokemon IDs for enemy party.
-        private void setupMonButtons(List<string> monIDs)
+        private void setupMonButtons(List<MsgsCommon.MonInfo> monIDs)
         {
-            Console.WriteLine("setting up enemy buttons");
+            Console.WriteLine("setting up enemy mon buttons");
 
             foreach (Control ctrl in grpMons.Controls)
             {
                 ctrl.Enabled = false;
             }
-            btnMon0.Text = $"{monIDs[0]}";
+            btnMon0.Text = $"{monIDs[0].name}";
             btnMon0.Enabled = true;
 
             if(monIDs.Count < 2)
@@ -413,31 +473,31 @@ namespace BizHawk.Tool.CrystalCtrl
                 return;
             }
 
-            btnMon1.Text = $"{monIDs[1]}";
+            btnMon1.Text = $"{monIDs[1].name}";
             btnMon1.Enabled = true;
             if (monIDs.Count < 3)
             {
                 return;
             }
-            btnMon2.Text = $"{monIDs[2]}";
+            btnMon2.Text = $"{monIDs[2].name}";
             btnMon2.Enabled = true;
             if (monIDs.Count < 4)
             {
                 return;
             }
-            btnMon3.Text = $"{monIDs[3]}";
+            btnMon3.Text = $"{monIDs[3].name}";
             btnMon3.Enabled = true;
             if (monIDs.Count < 5)
             {
                 return;
             }
-            btnMon4.Text = $"{monIDs[4]}";
+            btnMon4.Text = $"{monIDs[4].name}";
             btnMon4.Enabled = true;
             if (monIDs.Count < 6)
             {
                 return;
             }
-            btnMon5.Text = $"{monIDs[5]}";
+            btnMon5.Text = $"{monIDs[5].name}";
             btnMon5.Enabled = true;
         }
 
@@ -776,7 +836,8 @@ namespace BizHawk.Tool.CrystalCtrl
         {
             Console.WriteLine("connecting to ws");
 
-            var connectTask = wsClient.Connect(new Uri("ws://localhost:8999?type=emulator"));
+            //TODO: make configurable
+            var connectTask = wsClient.Connect(new Uri("ws://localhost:8999/?type=emulator"));
             connectTask.ContinueWith((task) =>
             {
                 if (task.Result == WsClient.ConnectResult.Success)
