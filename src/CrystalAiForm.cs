@@ -124,6 +124,8 @@ namespace BizHawk.Tool.CrystalCtrl
 
         const UInt16 RomBank = 0xff9d;
 
+        const UInt16 BattleStartMessage = 0x7c8b;
+
         //TOOD: inBattle should be "controllingBattle" - thta way we can start with false, even if start in middle of battle, 
         //Will just start working on next battle
         private bool enemyCtrlActive = false;
@@ -350,6 +352,26 @@ namespace BizHawk.Tool.CrystalCtrl
 
                 }
             }, ReadTrainerPartyDone, "System Bus");
+
+            //When the "TRAINER wants to battle!" text is about to appear, game hasn't yet
+            //decided which pokemon will go out first. So this is a good time to disable 
+            // player input to wait for opponent to choose mon
+            _maybeMemoryEventsAPI.AddExecCallback((_, _, _) =>
+            {
+                if(_maybeMemAPI.ReadByte(RomBank, "System Bus") != 0x0F)
+                {
+                    //wrong memory bank active, not the address we're actually interested in
+                    return;
+                }
+                var partyCount = _maybeMemAPI.ReadByte(OTPartyCount, "System Bus");
+                if (enemyCtrlActive && partyCount > 1 && !chosenMon.HasValue)
+                {
+                    //Waiting for enemy to choose pokemon, disable input until we receive which
+                    //mon should be used
+                    Console.WriteLine("Disabling input, waiting for opponent to select pokemon");
+                    InputDisable(true);
+                }
+            }, BattleStartMessage, "System Bus");
         }
 
         private List<MsgsCommon.MonInfo> readEnemyParty(){
