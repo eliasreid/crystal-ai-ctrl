@@ -389,7 +389,7 @@ namespace BizHawk.Tool.CrystalCtrl
                 MsgsCommon.Status status = readStatusFlags(statusFlags);
                 //TODO: check if pokemon is fainted, to override status condition.
                 //TODO: translate ID bytes to proper names (using resource file)
-                partyInfo.Add(new MsgsCommon.MonInfo(Convert.ToString(monID, 16), status));
+                partyInfo.Add(new MsgsCommon.MonInfo(DataHelpers.pokemonName(monID), status));
             }
             Console.WriteLine("Read enemy party");
             foreach(var mon in partyInfo){
