@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "CrystalAiCtrl": {
+      "commandName": "Executable",
+      "executablePath": "G:\\Projects\\emulation\\CrystalAiCtrl\\BizHawk\\EmuHawk.exe",
+      "commandLineArgs": "--open-ext-tool-dll=CrystalAiCtrl",
+      "workingDirectory": "G:\\Projects\\emulation\\CrystalAiCtrl\\BizHawk"
+    }
+  }
+}

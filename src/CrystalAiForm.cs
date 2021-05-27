@@ -544,6 +544,10 @@ namespace BizHawk.Tool.CrystalCtrl
 
         private void InputDisable(bool disable)
         {
+            if (chkJoypadDisable.Checked)
+            {
+                disable = false;
+            }
             inputDisabled = disable;
             _maybeMemAPI.WriteByte(0xCFBE, disable ? (uint)0b00010000 : 0);
         }
@@ -716,9 +720,9 @@ namespace BizHawk.Tool.CrystalCtrl
             this.chkJoypadDisable.AutoSize = true;
             this.chkJoypadDisable.Location = new System.Drawing.Point(30, 256);
             this.chkJoypadDisable.Name = "chkJoypadDisable";
-            this.chkJoypadDisable.Size = new System.Drawing.Size(80, 17);
+            this.chkJoypadDisable.Size = new System.Drawing.Size(131, 17);
             this.chkJoypadDisable.TabIndex = 3;
-            this.chkJoypadDisable.Text = "checkBox1";
+            this.chkJoypadDisable.Text = "Don\'t wait for ctrl input";
             this.chkJoypadDisable.UseVisualStyleBackColor = true;
             this.chkJoypadDisable.CheckedChanged += new System.EventHandler(this.checkBox1_CheckedChanged);
             // 
@@ -796,7 +800,8 @@ namespace BizHawk.Tool.CrystalCtrl
 
         private void checkBox1_CheckedChanged(object sender, EventArgs e)
         {
-            InputDisable(chkJoypadDisable.Checked);
+            //TODO: may want to save whether the input SHOULD be disabled or not
+            InputDisable(false);
         }
 
         private void ChooseMon(int index)
