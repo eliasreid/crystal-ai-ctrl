@@ -61,6 +61,128 @@ namespace CrystalAiCtrl.Properties {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to ????
+        ///Pound
+        ///????
+        ///Doubleslap
+        ///Comet Punch
+        ///Mega Punch
+        ///PayDay
+        ///Fire Punch
+        ///Ice Punch
+        ///Thunder Punch
+        ///Scratch
+        ///ViceGrip
+        ///Guillotine
+        ///Razor Wind
+        ///Swords Dance
+        ///Cut
+        ///Gust
+        ///Wing Attack
+        ///Whirlwind
+        ///Fly
+        ///Bind
+        ///Slam
+        ///Vine Whip
+        ///Stomp
+        ///Double Kick
+        ///Mega Kick
+        ///Jump Kick
+        ///Rolling Kick
+        ///Sand-Attack
+        ///Headbutt
+        ///Horn Attack
+        ///Fury Attack
+        ///Horn Drill
+        ///Tackle
+        ///Body Slam
+        ///Wrap
+        ///Take Down
+        ///Thrash
+        ///Double-Edge
+        ///Tail Whip
+        ///Poison Sting
+        ///Twineedle
+        ///Pin Missile
+        ///Leer
+        ///Bite
+        ///Growl
+        ///Roar
+        ///Sing
+        ///Supersonic
+        ///Sonicboom
+        ///Disable
+        ///Acid [rest of string was truncated]&quot;;.
+        /// </summary>
+        internal static string move_names {
+            get {
+                return ResourceManager.GetString("move_names", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to ????
+        ///Bulbasaur
+        ///Ivysaur
+        ///Venusaur
+        ///Charmander
+        ///Charmeleon
+        ///Charizard
+        ///Squirtle
+        ///Wartortle
+        ///Blastoise
+        ///Caterpie
+        ///Metapod
+        ///Butterfree
+        ///Weedle
+        ///Kakuna
+        ///Beedrill
+        ///Pidgey
+        ///Pidgeotto
+        ///Pidgeot
+        ///Rattata
+        ///Raticate
+        ///Spearow
+        ///Fearow
+        ///Ekans
+        ///Arbok
+        ///Pikachu
+        ///Raichu
+        ///Sandshrew
+        ///Sandslash
+        ///Nidoran F
+        ///Nidorina
+        ///Nidoqueen
+        ///Nidoran M
+        ///Nidorino
+        ///Nidoking
+        ///Clefairy
+        ///Clefable
+        ///Vulpix
+        ///Ninetales
+        ///Jigglypuff
+        ///Wigglytuff
+        ///Zubat
+        ///Golbat
+        ///Oddish
+        ///Gloom
+        ///Vileplume
+        ///Paras
+        ///Parasect
+        ///Venonat
+        ///Venomoth
+        ///Diglett
+        ///Dugtrio
+        ///Meowth
+        ///Persia [rest of string was truncated]&quot;;.
+        /// </summary>
+        internal static string pokemon_names {
+            get {
+                return ResourceManager.GetString("pokemon_names", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to line1
         ///line2
         ///.

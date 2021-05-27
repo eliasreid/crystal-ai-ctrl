@@ -1,27 +1,31 @@
 ﻿using System.Collections.Generic;
 using static CrystalAiCtrl.Properties.Resources;
-using System.Resources;
+using System.Linq;
+using System;
 
 namespace CrystalAiCtrl
 {
     public class DataHelpers
     {
-        static public List<string> PokemonNames { get; private set; }
+        static public List<string> PokemonNames;
+        static public List<string> MoveNames;
 
         static DataHelpers()
         {
-            //static constructor - will run once to initialize things before any DataHelpers
             //functions are called
-            PokemonNames = new List<string>();
-            PokemonNames.Add(Properties.Resources.sample_resource);
+            PokemonNames = pokemon_names.Split(Environment.NewLine.ToCharArray(), StringSplitOptions.RemoveEmptyEntries).ToList<string>();
+            MoveNames = move_names.Split(Environment.NewLine.ToCharArray(), StringSplitOptions.RemoveEmptyEntries).ToList<string>();
         }
 
-        // Example function. Tested in Tests.ExampleTest() method
-        public static int add(int a, int b)
+        public static string pokemonName(byte monId)
         {
-            return a + b;
+            return PokemonNames[(int)monId];
         }
 
+        public static string moveName(byte moveId)
+        {
+            return MoveNames[(int)moveId];
+        }
     }
 
 }

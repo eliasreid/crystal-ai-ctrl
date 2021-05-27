@@ -8,16 +8,19 @@ namespace Tests
     [TestClass]
     public class Tests
     {
-        [TestMethod]
-        public void ExampleTestCase()
+
+        [TestMethod] 
+        public void PokemonNamesTest()
         {
-            Assert.AreEqual(3, DataHelpers.add(1, 2));
+            Assert.AreEqual("Bulbasaur", DataHelpers.pokemonName(1));
+            Assert.AreEqual("Celebi", DataHelpers.pokemonName(251));
         }
 
         [TestMethod]
-        public void TestResource()
+        public void MoveNamesTest()
         {
-            Assert.AreEqual("value", DataHelpers.PokemonNames[0]);
+            Assert.AreEqual("Pound", DataHelpers.moveName(1));
+            Assert.AreEqual("Beat Up", DataHelpers.moveName(251));
         }
 
         //msg tests
