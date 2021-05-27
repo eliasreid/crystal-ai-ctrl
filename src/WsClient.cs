@@ -77,7 +77,6 @@ namespace CrystalAiCtrl
             while (ws != null && ws.State == WebSocketState.Open)
             {
                 //add received data to end of buffer
-                Console.WriteLine("waiting for message..");
                 var rxTask = ws.ReceiveAsync(new ArraySegment<byte>(rxBuffer, rxBytes, rxBuffer.Length - rxBytes), CancellationToken.None);
                 //Just swallow exception here
                 try
@@ -98,12 +97,10 @@ namespace CrystalAiCtrl
 
                 var rxResult = rxTask.Result;
                 rxBytes += rxResult.Count;
-                Console.WriteLine($"message received, size {rxResult.Count}, eom? {rxResult.EndOfMessage}");
 
                 //Check if eom
                 if (rxMessageCb != null && rxResult.EndOfMessage == true)
                 {
-                    Console.WriteLine($"calling callback");
                     rxMessageCb(new ArraySegment<byte>(rxBuffer, 0, rxBytes));
                     rxBytes = 0;
                 }

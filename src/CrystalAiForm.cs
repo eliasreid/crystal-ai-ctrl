@@ -173,7 +173,7 @@ namespace BizHawk.Tool.CrystalCtrl
             wsClient.MessageReceiveCallback( data =>
             {
                 string msgString = Encoding.UTF8.GetString(data.Array, 0, data.Count);
-                Console.WriteLine($"message received from websocket: {msgString}");
+                //Console.WriteLine($"message received from websocket: {msgString}");
                 try{
                     //iterate over json fields until see "chosenAction" string
                     //Probably better ways to check json for field before deserializing object.
@@ -190,7 +190,7 @@ namespace BizHawk.Tool.CrystalCtrl
                         }
                     }
                 }catch(JsonReaderException e){
-                    Console.WriteLine($"Json parse exception {e.ToString()}");
+                    //Console.WriteLine($"Json parse exception {e.ToString()}");
                 }
             });
 
@@ -843,11 +843,11 @@ namespace BizHawk.Tool.CrystalCtrl
                 if (task.Result == WsClient.ConnectResult.Success)
                 {
                     //Update GUI with link for client to connect
-                    Console.WriteLine($"connection to server success!");
+                    //Console.WriteLine($"connection to server success!");
                 }
                 else
                 {
-                    Console.WriteLine($"connection to server fail!");
+                    //Console.WriteLine($"connection to server fail!");
                 }
             });
         }
@@ -882,7 +882,7 @@ namespace BizHawk.Tool.CrystalCtrl
         //For handling moves chosen from browser client.
         //TODO: maybe re-use this same function from lcoal UI buttons?
         private void handleChosenAction(ChosenActionMsg chosenAction){
-            Console.WriteLine($"Handling chosen action: {chosenAction.actionType} {chosenAction.actionIndex}");
+            //Console.WriteLine($"Handling chosen action: {chosenAction.actionType} {chosenAction.actionIndex}");
             switch(chosenAction.actionType){
                 case MsgsCommon.ActionType.useMove:
                     ChooseMove(chosenAction.actionIndex);
