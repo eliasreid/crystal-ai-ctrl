@@ -834,7 +834,6 @@ namespace BizHawk.Tool.CrystalCtrl
 
         private void ChooseMove(int index)
         {
-            Console.WriteLine($"choosing move {index}");
             chosenMove = index;
             InputDisable(false);
         }
