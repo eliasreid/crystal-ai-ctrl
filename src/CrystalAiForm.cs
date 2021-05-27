@@ -47,6 +47,8 @@ namespace BizHawk.Tool.CrystalCtrl
         private Button btnMon1;
         private Button btnMon0;
         private Label lblCurrentState;
+        private Button btnConnect;
+        private Button btnTestSend;
 
         //the null-coalescing assignment operator ??= assigns the value of its right-hand operand to its left-hand operand
         //only if the left-hand operand evaluates to null. The ??= operator doesn't evaluate its
@@ -126,29 +128,37 @@ namespace BizHawk.Tool.CrystalCtrl
 
         const UInt16 BattleStartMessage = 0x7c8b;
 
-        //TOOD: inBattle should be "controllingBattle" - thta way we can start with false, even if start in middle of battle, 
-        //Will just start working on next battle
-        private bool enemyCtrlActive = false;
-
-        private int? chosenMove = null;
-        private int? chosenMon = null;
-        private List<byte> enemyMoves;
-
         //Data for switching logic
-        //Trainer class has to be modifiy temporarily to simplify forcing enemy to switch
-        private uint savedTrainerClass = 0;
-        const UInt16 TrainerClass = 0xD233;
         const UInt16 EnemySwitchMonIndex = 0xc718;
         const UInt16 AiTrySwitch = 0x444B;
         const UInt16 DontSwitchRet = 0x4044;
 
         const UInt16 ReadTrainerPartyDone = 0x57d0;
 
+        //TOOD: inBattle should be "controllingBattle" - thta way we can start with false, even if start in middle of battle, 
+        //Will just start working on next battle
+        private bool enemyCtrlActive = false;
+        private int? chosenMove = null;
+        private int? chosenMon = null;
+        private List<byte> enemyMoves = new List<byte>();
         bool inputDisabled = false;
-        private Button btnConnect;
-        private Button btnTestSend;
 
-        //ClientWebSocket ws = new ClientWebSocket();
+        private void resetBattleState()
+        {
+            enemyCtrlActive = false;
+            chosenMon = null;
+            chosenMove = null;
+            enemyMoves.Clear();
+            inputDisabled = false;
+
+            AvailableActionsMsg msg = new AvailableActionsMsg();
+            setupMonButtons(msg.pokemon);
+            setupMoveButtons(msg.moves);
+            //TODO: item buttons
+            string json = JsonConvert.SerializeObject(msg, Formatting.None);
+            wsClient.SendMessage(json);
+
+        }
 
         WsClient wsClient = new WsClient();
 
@@ -188,7 +198,6 @@ namespace BizHawk.Tool.CrystalCtrl
                             //handle chosen action message
                             var chosenAction = JsonConvert.DeserializeObject<ChosenActionMsg>(msgString);
                             handleChosenAction(chosenAction);
-                            
                         }
                     }
                 }catch(JsonReaderException e){
@@ -201,6 +210,11 @@ namespace BizHawk.Tool.CrystalCtrl
             {
                 Console.WriteLine($"{entry.Key}");
             }
+
+            _maybeClientAPI.StateLoaded += (_, _) =>
+            {
+                resetBattleState();
+            };
 
             //set inBattle flag when enemy trainer is inited
             //TODO: eventually meaning will change - only set inBattle if enemy is being controlled by net / ui, etc
@@ -374,6 +388,7 @@ namespace BizHawk.Tool.CrystalCtrl
             }, BattleStartMessage, "System Bus");
         }
 
+        
         private List<MsgsCommon.MonInfo> readEnemyParty(){
             //Read enemy party pokemon names - already doing this in another piece of code (above)
 
@@ -447,6 +462,7 @@ namespace BizHawk.Tool.CrystalCtrl
             chosenMove = null;
             foreach (Control ctrl in grpMoves.Controls)
             {
+                ctrl.Text = "";
                 ctrl.Enabled = false;
             }
 
@@ -486,7 +502,13 @@ namespace BizHawk.Tool.CrystalCtrl
             foreach (Control ctrl in grpMons.Controls)
             {
                 ctrl.Enabled = false;
+                ctrl.Text = "";
             }
+            if (monIDs.Count < 1)
+            {
+                return;
+            }
+
             btnMon0.Text = $"{monIDs[0].name}";
             btnMon0.Enabled = true;
 

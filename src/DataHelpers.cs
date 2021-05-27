@@ -13,8 +13,10 @@ namespace CrystalAiCtrl
         static DataHelpers()
         {
             //functions are called
-            PokemonNames = pokemon_names.Split(Environment.NewLine.ToCharArray(), StringSplitOptions.RemoveEmptyEntries).ToList<string>();
-            MoveNames = move_names.Split(Environment.NewLine.ToCharArray(), StringSplitOptions.RemoveEmptyEntries).ToList<string>();
+            PokemonNames = pokemon_names
+                .Split(Environment.NewLine.ToCharArray(), StringSplitOptions.RemoveEmptyEntries).ToList<string>();
+            MoveNames = move_names
+                .Split(Environment.NewLine.ToCharArray(), StringSplitOptions.RemoveEmptyEntries).ToList<string>();
         }
 
         public static string pokemonName(byte monId)
