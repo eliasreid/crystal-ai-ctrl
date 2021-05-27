@@ -61,6 +61,68 @@ namespace CrystalAiCtrl.Properties {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to ????
+        ///Bulbasaur
+        ///Ivysaur
+        ///Venusaur
+        ///Charmander
+        ///Charmeleon
+        ///Charizard
+        ///Squirtle
+        ///Wartortle
+        ///Blastoise
+        ///Caterpie
+        ///Metapod
+        ///Butterfree
+        ///Weedle
+        ///Kakuna
+        ///Beedrill
+        ///Pidgey
+        ///Pidgeotto
+        ///Pidgeot
+        ///Rattata
+        ///Raticate
+        ///Spearow
+        ///Fearow
+        ///Ekans
+        ///Arbok
+        ///Pikachu
+        ///Raichu
+        ///Sandshrew
+        ///Sandslash
+        ///Nidoran F
+        ///Nidorina
+        ///Nidoqueen
+        ///Nidoran M
+        ///Nidorino
+        ///Nidoking
+        ///Clefairy
+        ///Clefable
+        ///Vulpix
+        ///Ninetales
+        ///Jigglypuff
+        ///Wigglytuff
+        ///Zubat
+        ///Golbat
+        ///Oddish
+        ///Gloom
+        ///Vileplume
+        ///Paras
+        ///Parasect
+        ///Venonat
+        ///Venomoth
+        ///Diglett
+        ///Dugtrio
+        ///Meowth
+        ///Persia [rest of string was truncated]&quot;;.
+        /// </summary>
+        internal static string pokemon_names {
+            get {
+                return ResourceManager.GetString("pokemon_names", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to line1
         ///line2
         ///.
