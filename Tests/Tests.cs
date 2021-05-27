@@ -10,10 +10,17 @@ namespace Tests
     {
 
         [TestMethod] 
-        public void TestResource()
+        public void PokemonNamesTest()
         {
             Assert.AreEqual("Bulbasaur", DataHelpers.pokemonName(1));
             Assert.AreEqual("Celebi", DataHelpers.pokemonName(251));
+        }
+
+        [TestMethod]
+        public void MoveNamesTest()
+        {
+            Assert.AreEqual("Pound", DataHelpers.moveName(1));
+            Assert.AreEqual("Beat Up", DataHelpers.moveName(251));
         }
 
         //msg tests

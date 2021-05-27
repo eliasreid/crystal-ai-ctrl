@@ -62,6 +62,66 @@ namespace CrystalAiCtrl.Properties {
         
         /// <summary>
         ///   Looks up a localized string similar to ????
+        ///Pound
+        ///????
+        ///Doubleslap
+        ///Comet Punch
+        ///Mega Punch
+        ///PayDay
+        ///Fire Punch
+        ///Ice Punch
+        ///Thunder Punch
+        ///Scratch
+        ///ViceGrip
+        ///Guillotine
+        ///Razor Wind
+        ///Swords Dance
+        ///Cut
+        ///Gust
+        ///Wing Attack
+        ///Whirlwind
+        ///Fly
+        ///Bind
+        ///Slam
+        ///Vine Whip
+        ///Stomp
+        ///Double Kick
+        ///Mega Kick
+        ///Jump Kick
+        ///Rolling Kick
+        ///Sand-Attack
+        ///Headbutt
+        ///Horn Attack
+        ///Fury Attack
+        ///Horn Drill
+        ///Tackle
+        ///Body Slam
+        ///Wrap
+        ///Take Down
+        ///Thrash
+        ///Double-Edge
+        ///Tail Whip
+        ///Poison Sting
+        ///Twineedle
+        ///Pin Missile
+        ///Leer
+        ///Bite
+        ///Growl
+        ///Roar
+        ///Sing
+        ///Supersonic
+        ///Sonicboom
+        ///Disable
+        ///Acid [rest of string was truncated]&quot;;.
+        /// </summary>
+        internal static string move_names {
+            get {
+                return ResourceManager.GetString("move_names", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to ????
         ///Bulbasaur
         ///Ivysaur
         ///Venusaur

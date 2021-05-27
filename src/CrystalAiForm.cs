@@ -258,7 +258,7 @@ namespace BizHawk.Tool.CrystalCtrl
                     AvailableActionsMsg msg = new AvailableActionsMsg();
                     msg.pokemon = readEnemyParty();
                     foreach(byte moveId in enemyMoves){
-                        msg.moves.Add(Convert.ToString(moveId, 16));
+                        msg.moves.Add(DataHelpers.moveName(moveId));
                     }
 
                     //TODO: read available pokemon to switch to.
