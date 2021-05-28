@@ -53,11 +53,6 @@ namespace BizHawk.Tool.CrystalCtrl
         private Button btnItem1;
         private Button btnItem0;
 
-        //the null-coalescing assignment operator ??= assigns the value of its right-hand operand to its left-hand operand
-        //only if the left-hand operand evaluates to null. The ??= operator doesn't evaluate its
-        //right-hand operand if the left-hand operand evaluates to non-null.
-
-        //The null-coalescing operator ?? returns the value of its left-hand operand if it isn't null; otherwise, it evaluates the right-hand operand and returns its result
         private ApiContainer APIs => _apis ??= new ApiContainer(new Dictionary<Type, IExternalApi>
         {
             [typeof(ICommApi)] = _maybeCommAPI ?? throw new NullReferenceException(),
@@ -68,35 +63,6 @@ namespace BizHawk.Tool.CrystalCtrl
             [typeof(IMemoryApi)] = _maybeMemAPI ?? throw new NullReferenceException(),
             [typeof(IMemoryEventsApi)] = _maybeMemoryEventsAPI ?? throw new NullReferenceException()
         });
-
-        //Mem domain WRAM
-        //Mem domain ROM
-        //Mem domain VRAM
-        //Mem domain OAM
-        //Mem domain HRAM
-        //Mem domain System Bus
-        //Mem domain CartRAM
-
-//register PCl : 25
-//register PCh : 2
-//register SPl : 248
-//register SPh : 255
-//register A : 62
-//register F : 160
-//register B : 78
-//register C : 62
-//register D : 221
-//register E : 0
-//register H : 255
-//register L : 15
-//register W : 252
-//register Z : 0
-//register PC : 537
-//register Flag I : 0
-//register Flag C : 0
-//register Flag H : 1
-//register Flag N : 0
-//register Flag Z : 1
 
         //Game constants
         const uint BattleMode = 0xD22D;
@@ -142,18 +108,14 @@ namespace BizHawk.Tool.CrystalCtrl
         //TOOD: inBattle should be "controllingBattle" - thta way we can start with false, even if start in middle of battle, 
         //Will just start working on next battle
         private bool enemyCtrlActive = false;
-        private int? chosenMove = null;
-        private int? chosenMon = null;
-        private int? chosenItem = null;
+        private ChosenActionMsg currentChosenAction = null;
         private List<byte> enemyMoves = new List<byte>();
         bool inputDisabled = false;
 
         private void resetBattleState()
         {
             enemyCtrlActive = false;
-            chosenMon = null;
-            chosenMove = null;
-            chosenItem = null;
+            currentChosenAction = null;
             enemyMoves.Clear();
             inputDisabled = false;
 
@@ -233,22 +195,21 @@ namespace BizHawk.Tool.CrystalCtrl
 
                 if (enemyCtrlActive && _maybeMemAPI.ReadByte(RomBank, "System Bus") == 0x0E)
                 {
-                    if (chosenMon.HasValue)
+                    if(currentChosenAction?.actionType == MsgsCommon.ActionType.pokemonSwitch)
                     {
                         //Try jumping to AI_TrySwitch with wEnemySwitchMonIndexSet
                         _maybeEmuAPI.SetRegister("PC", AiTrySwitch);
 
                         //TOOD: make sure works, I think index is actually 1-6
-                        Console.WriteLine($"Switching mon to {chosenMon.Value}");
-                        _maybeMemAPI.WriteByte(EnemySwitchMonIndex, (uint)chosenMon.Value + 1, "System Bus");
-                        chosenMon = null;
-                    }else if (chosenMove.HasValue)
+                        Console.WriteLine($"Switching mon to index: {currentChosenAction.actionIndex}");
+                        _maybeMemAPI.WriteByte(EnemySwitchMonIndex, (uint)currentChosenAction.actionIndex + 1, "System Bus");
+                        currentChosenAction = null;
+                    }else if (currentChosenAction?.actionType == MsgsCommon.ActionType.useMove)
                     {
                         //Jump to return statement in DontSwitch - this is to ensure selected move doesn't get overwritten
                         // AI choice to use item or switch
                         Console.WriteLine($"Jumping to DontSwitchRet to ensure item / switch not used");
                         _maybeEmuAPI.SetRegister("PC", DontSwitchRet);
-                        chosenMove = null;
                     }
                 }
             }, SwitchOrTryItemOk, "System Bus");
@@ -288,13 +249,13 @@ namespace BizHawk.Tool.CrystalCtrl
                 if (enemyCtrlActive)
                 {
                     Console.WriteLine("Parsing enemy action");
-                    if (chosenMove.HasValue)
+                    if(currentChosenAction?.actionType == MsgsCommon.ActionType.useMove)
                     {
                         //TODO: So I also have to force enemy AI NOT to use item or swi
                         Console.WriteLine("Overwriting enemy move with chosen move");
-                        _maybeMemAPI.WriteByte(EnemyCurrentMove, enemyMoves[chosenMove.Value], "System Bus");
-                        _maybeMemAPI.WriteByte(EnemyCurrentMoveNum, (uint)chosenMove.Value, "System Bus");
-                        chosenMove = null;
+                        _maybeMemAPI.WriteByte(EnemyCurrentMove, enemyMoves[currentChosenAction.actionIndex], "System Bus");
+                        _maybeMemAPI.WriteByte(EnemyCurrentMoveNum, (uint)currentChosenAction.actionIndex, "System Bus");
+                        currentChosenAction = null;
                     }
                     else
                     {
@@ -310,13 +271,14 @@ namespace BizHawk.Tool.CrystalCtrl
             {
                 //If Enemy has not yet chosen a move
                 //TODO: OR SWITCH / ITEM. ETC - ACTION
-                if (enemyCtrlActive && !chosenMove.HasValue && !chosenMon.HasValue)
+                if (enemyCtrlActive && currentChosenAction == null)
                 {
                     Console.WriteLine("Disabling input, waiting for opponent to select action");
                     InputDisable(true);
                 }
                 //TODO: ideally we only disable input AFTER user has selected an action
                 //That is, intercept their action, cancel it, they run it after enemy has selected a move
+                //Current limitation means that enemy has to choose move first
             }, BattleMenu, "System Bus");
 
             //Executed when enemey pokemon is loading from party
@@ -327,11 +289,11 @@ namespace BizHawk.Tool.CrystalCtrl
             {
                 if(enemyCtrlActive && _maybeMemAPI.ReadByte(RomBank, "System Bus") == 0x0F)
                 {
-                    if (chosenMon.HasValue)
+                    if(currentChosenAction?.actionType == MsgsCommon.ActionType.pokemonSwitch)
                     {
-                        Console.WriteLine($"in LoadEnemyMonToSwitchTo callback, setting mon index to {chosenMon}");
-                        _maybeEmuAPI.SetRegister("B", chosenMon.Value);
-                        chosenMon = null;
+                        Console.WriteLine($"in LoadEnemyMonToSwitchTo callback, setting mon index to {currentChosenAction.actionIndex}");
+                        _maybeEmuAPI.SetRegister("B", currentChosenAction.actionIndex);
+                        currentChosenAction = null;
                     }
                     else
                     {
@@ -367,7 +329,7 @@ namespace BizHawk.Tool.CrystalCtrl
                     return;
                 }
                 var partyCount = _maybeMemAPI.ReadByte(OTPartyCount, "System Bus");
-                if (enemyCtrlActive && partyCount > 1 && !chosenMon.HasValue)
+                if (enemyCtrlActive && partyCount > 1 && currentChosenAction == null)
                 {
                     //Waiting for enemy to choose pokemon, disable input until we receive which
                     //mon should be used
@@ -447,9 +409,6 @@ namespace BizHawk.Tool.CrystalCtrl
         {
             Console.WriteLine("Setting up move buttons");
 
-            //Check if connected to websocket, send JSON to server.
-
-            chosenMove = null;
             foreach (Control ctrl in grpMoves.Controls)
             {
                 ctrl.Text = "";
@@ -840,32 +799,32 @@ namespace BizHawk.Tool.CrystalCtrl
 
         private void btnMon0_Click(object sender, EventArgs e)
         {
-            ChooseMon(0);
+            handleChosenAction(new ChosenActionMsg(MsgsCommon.ActionType.pokemonSwitch, 0));
         }
 
         private void btnMon1_Click(object sender, EventArgs e)
         {
-            ChooseMon(1);
+            handleChosenAction(new ChosenActionMsg(MsgsCommon.ActionType.pokemonSwitch, 1));
         }
 
         private void btnMon2_Click(object sender, EventArgs e)
         {
-            ChooseMon(2);
+            handleChosenAction(new ChosenActionMsg(MsgsCommon.ActionType.pokemonSwitch, 2));
         }
 
         private void btnMon3_Click(object sender, EventArgs e)
         {
-            ChooseMon(3);
+            handleChosenAction(new ChosenActionMsg(MsgsCommon.ActionType.pokemonSwitch, 3));
         }
 
         private void btnMon4_Click(object sender, EventArgs e)  
         {
-            ChooseMon(4);
+            handleChosenAction(new ChosenActionMsg(MsgsCommon.ActionType.pokemonSwitch, 4));
         }
 
         private void btnMon5_Click(object sender, EventArgs e)
         {
-            ChooseMon(5);
+            handleChosenAction(new ChosenActionMsg(MsgsCommon.ActionType.pokemonSwitch, 5));
         }
 
         private void checkBox1_CheckedChanged(object sender, EventArgs e)
@@ -874,51 +833,33 @@ namespace BizHawk.Tool.CrystalCtrl
             InputDisable(false);
         }
 
-        private void ChooseMon(int index)
-        {
-            chosenMon = index;
-            InputDisable(false);
-        }
-
-        private void ChooseMove(int index)
-        {
-            chosenMove = index;
-            InputDisable(false);
-        }
-        private void chooseItem(int index)
-        {
-            //TODO: Implement - item selection in appropriate callback
-            chosenItem = index;
-            InputDisable(false);
-        }
-
         private void btnMove0_Click(object sender, EventArgs e)
         {
-            ChooseMove(0);
+            handleChosenAction(new ChosenActionMsg(MsgsCommon.ActionType.useMove, 0));
         }
 
         private void btnMove1_Click(object sender, EventArgs e)
         {
-            ChooseMove(1);
+            handleChosenAction(new ChosenActionMsg(MsgsCommon.ActionType.useMove, 1));
         }
 
         private void btnMove2_Click(object sender, EventArgs e)
         {
-            ChooseMove(2);
+            handleChosenAction(new ChosenActionMsg(MsgsCommon.ActionType.useMove, 2));
         }
 
         private void btnMove3_Click(object sender, EventArgs e)
         {
-            ChooseMove(3);
+            handleChosenAction(new ChosenActionMsg(MsgsCommon.ActionType.useMove, 3));
         }
         private void btnItem0_Click(object sender, EventArgs e)
         {
-            chooseItem(0);
+            handleChosenAction(new ChosenActionMsg(MsgsCommon.ActionType.useItem, 0));
         }
 
         private void btnItem1_Click(object sender, EventArgs e)
         {
-            chooseItem(1);
+            handleChosenAction(new ChosenActionMsg(MsgsCommon.ActionType.useItem, 1));
         }
 
         private void btnConnect_Click(object sender, EventArgs e)
@@ -968,26 +909,16 @@ namespace BizHawk.Tool.CrystalCtrl
             Console.WriteLine("sending: " + json);
         }
 
-        //For handling moves chosen from browser client.
-        //TODO: maybe re-use this same function from lcoal UI buttons?
+        //For handling moves chosen from browser client or ui buttons
         private void handleChosenAction(ChosenActionMsg chosenAction){
-            //Console.WriteLine($"Handling chosen action: {chosenAction.actionType} {chosenAction.actionIndex}");
-            switch(chosenAction.actionType){
-                case MsgsCommon.ActionType.useMove:
-                    ChooseMove(chosenAction.actionIndex);
-                    break;
-                case MsgsCommon.ActionType.pokemonSwitch:
-                    ChooseMon(chosenAction.actionIndex);
-                    break;
-                case MsgsCommon.ActionType.useItem:
-                    //TODO: handle item
-                    chooseItem(chosenAction.actionIndex);
-                    break;
-            }
+            currentChosenAction = chosenAction;
+            InputDisable(false);
         }
 
         private void updateClientActions(AvailableActionsMsg availableActions)
         {
+            currentChosenAction = null;
+
             //update plugin UI
             setupItemButtons(availableActions.items);
             setupMonButtons(availableActions.pokemon);
@@ -997,7 +928,6 @@ namespace BizHawk.Tool.CrystalCtrl
             string json = JsonConvert.SerializeObject(availableActions, Formatting.None);
             wsClient.SendMessage(json);
         }
-
 
     }
 

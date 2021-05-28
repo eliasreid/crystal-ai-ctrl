@@ -78,6 +78,14 @@ namespace CrystalAiCtrl
         //action can be fully described by a type and index.
         public MsgsCommon.ActionType actionType;
         public int actionIndex;
+
+        public ChosenActionMsg() { }
+
+        public ChosenActionMsg(MsgsCommon.ActionType type, int index)
+        {
+            actionType = type;
+            actionIndex = index;
+        }
     }
 
 
