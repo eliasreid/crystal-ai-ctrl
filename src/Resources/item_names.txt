@@ -1,0 +1,191 @@
+No Item
+Master Ball
+Ultra Ball
+Brightpowder
+Great Ball
+Poke Ball
+Town Map
+Bicycle
+Moon Stone
+Antidote
+Burn Heal
+Ice Heal
+Awakening
+Parlyz Heal
+Full Restore
+Max Potion
+Hyper Potion
+Super Potion
+Potion
+Escape Rope
+Repel
+Max Elixer
+Fire Stone
+Thunderstone
+Water Stone
+Item 19
+Hp Up
+Protein
+Iron
+Carbos
+Lucky Punch
+Calcium
+Rare Candy
+X Accuracy
+Leaf Stone
+Metal Powder
+Nugget
+Poke Doll
+Full Heal
+Revive
+Max Revive
+Guard Spec
+Super Repel
+Max Repel
+Dire Hit
+Item 2D
+Fresh Water
+Soda Pop
+Lemonade
+X Attack
+Item 32
+X Defend
+X Speed
+X Special
+Coin Case
+Itemfinder
+Poke Flute
+Exp Share
+Old Rod
+Good Rod
+Silver Leaf
+Super Rod
+Pp Up
+Ether
+Max Ether
+Elixer
+Red Scale
+Secretpotion
+S S Ticket
+Mystery Egg
+Clear Bell
+Silver Wing
+Moomoo Milk
+Quick Claw
+Psncureberry
+Gold Leaf
+Soft Sand
+Sharp Beak
+Przcureberry
+Burnt Berry
+Ice Berry
+Poison Barb
+Kings Rock
+Bitter Berry
+Mint Berry
+Red Apricorn
+Tinymushroom
+Big Mushroom
+Silverpowder
+Blu Apricorn
+Item 5A
+Amulet Coin
+Ylw Apricorn
+Grn Apricorn
+Cleanse Tag
+Mystic Water
+Twistedspoon
+Wht Apricorn
+Blackbelt I
+Blk Apricorn
+Item 64
+Pnk Apricorn
+Blackglasses
+Slowpoketail
+Pink Bow
+Stick
+Smoke Ball
+Nevermeltice
+Magnet
+Miracleberry
+Pearl
+Big Pearl
+Everstone
+Spell Tag
+Ragecandybar
+Gs Ball
+Blue Card
+Miracle Seed
+Thick Club
+Focus Band
+Item 78
+Energypowder
+Energy Root
+Heal Powder
+Revival Herb
+Hard Stone
+Lucky Egg
+Card Key
+Machine Part
+Egg Ticket
+Lost Item
+Stardust
+Star Piece
+Basement Key
+Pass
+Item 87
+Item 88
+Item 89
+Charcoal
+Berry Juice
+Scope Lens
+Item 8D
+Item 8E
+Metal Coat
+Dragon Fang
+Item 91
+Leftovers
+Item 93
+Item 94
+Item 95
+Mysteryberry
+Dragon Scale
+Berserk Gene
+Item 99
+Item 9A
+Item 9B
+Sacred Ash
+Heavy Ball
+Flower Mail
+Level Ball
+Lure Ball
+Fast Ball
+Item A2
+Light Ball
+Friend Ball
+Moon Ball
+Love Ball
+Normal Box
+Gorgeous Box
+Sun Stone
+Polkadot Bow
+Item Ab
+Up Grade
+Berry
+Gold Berry
+Squirtbottle
+Item B0
+Park Ball
+Rainbow Wing
+Item B3
+Brick Piece
+Surf Mail
+Litebluemail
+Portraitmail
+Lovely Mail
+Eon Mail
+Morph Mail
+Bluesky Mail
+Music Mail
+Mirage Mail
+Item Be

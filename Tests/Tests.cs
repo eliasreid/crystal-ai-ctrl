@@ -23,6 +23,14 @@ namespace Tests
             Assert.AreEqual("Beat Up", DataHelpers.moveName(251));
         }
 
+        [TestMethod]
+        public void ItemNamesTest()
+        {
+            Assert.AreEqual("No Item", DataHelpers.itemName(0));
+            Assert.AreEqual("Master Ball", DataHelpers.itemName(1));
+            Assert.AreEqual("Antidote", DataHelpers.itemName(9));
+        }
+
         //msg tests
         // [TestMethod]
         // public void ParseBattleStart()

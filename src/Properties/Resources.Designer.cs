@@ -61,6 +61,61 @@ namespace CrystalAiCtrl.Properties {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to No Item
+        ///Master Ball
+        ///Ultra Ball
+        ///Brightpowder
+        ///Great Ball
+        ///Poke Ball
+        ///Town Map
+        ///Bicycle
+        ///Moon Stone
+        ///Antidote
+        ///Burn Heal
+        ///Ice Heal
+        ///Awakening
+        ///Parlyz Heal
+        ///Full Restore
+        ///Max Potion
+        ///Hyper Potion
+        ///Super Potion
+        ///Potion
+        ///Escape Rope
+        ///Repel
+        ///Max Elixer
+        ///Fire Stone
+        ///Thunderstone
+        ///Water Stone
+        ///Item 19
+        ///Hp Up
+        ///Protein
+        ///Iron
+        ///Carbos
+        ///Lucky Punch
+        ///Calcium
+        ///Rare Candy
+        ///X Accuracy
+        ///Leaf Stone
+        ///Metal Powder
+        ///Nugget
+        ///Poke Doll
+        ///Full Heal
+        ///Revive
+        ///Max Revive
+        ///Guard Spec
+        ///Super Repel
+        ///Max Repel
+        ///Dire Hit
+        ///Item 2D
+        ///Fresh  [rest of string was truncated]&quot;;.
+        /// </summary>
+        internal static string item_names {
+            get {
+                return ResourceManager.GetString("item_names", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to ????
         ///Pound
         ///????

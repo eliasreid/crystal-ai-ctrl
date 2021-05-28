@@ -7,8 +7,9 @@ namespace CrystalAiCtrl
 {
     public class DataHelpers
     {
-        static public List<string> PokemonNames;
-        static public List<string> MoveNames;
+        static private List<string> PokemonNames;
+        static private List<string> MoveNames;
+        static private List<string> ItemNames;
 
         static DataHelpers()
         {
@@ -16,6 +17,8 @@ namespace CrystalAiCtrl
             PokemonNames = pokemon_names
                 .Split(Environment.NewLine.ToCharArray(), StringSplitOptions.RemoveEmptyEntries).ToList<string>();
             MoveNames = move_names
+                .Split(Environment.NewLine.ToCharArray(), StringSplitOptions.RemoveEmptyEntries).ToList<string>();
+            ItemNames = item_names
                 .Split(Environment.NewLine.ToCharArray(), StringSplitOptions.RemoveEmptyEntries).ToList<string>();
         }
 
@@ -27,6 +30,10 @@ namespace CrystalAiCtrl
         public static string moveName(byte moveId)
         {
             return MoveNames[(int)moveId];
+        }
+        public static string itemName(byte itemId)
+        {
+            return ItemNames[(int)itemId];
         }
     }
 
