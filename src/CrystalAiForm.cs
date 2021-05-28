@@ -35,8 +35,8 @@ namespace BizHawk.Tool.CrystalCtrl
 
         private ApiContainer? _apis;
         private GroupBox grpMoves;
-        private Button btnMove1;
         private Button btnMove0;
+        private Button btnMove1;
         private Button btnMove2;
         private Button btnMove3;
         private GroupBox grpMons;
@@ -49,6 +49,9 @@ namespace BizHawk.Tool.CrystalCtrl
         private Label lblCurrentState;
         private Button btnConnect;
         private Button btnTestSend;
+        private GroupBox grpItems;
+        private Button btnItem1;
+        private Button btnItem0;
 
         //the null-coalescing assignment operator ??= assigns the value of its right-hand operand to its left-hand operand
         //only if the left-hand operand evaluates to null. The ??= operator doesn't evaluate its
@@ -135,11 +138,14 @@ namespace BizHawk.Tool.CrystalCtrl
 
         const UInt16 ReadTrainerPartyDone = 0x57d0;
 
+        const UInt16 EnemyTrainerItem1 = 0xc650;
+
         //TOOD: inBattle should be "controllingBattle" - thta way we can start with false, even if start in middle of battle, 
         //Will just start working on next battle
         private bool enemyCtrlActive = false;
         private int? chosenMove = null;
         private int? chosenMon = null;
+        private int? chosenItem = null;
         private List<byte> enemyMoves = new List<byte>();
         bool inputDisabled = false;
 
@@ -148,16 +154,16 @@ namespace BizHawk.Tool.CrystalCtrl
             enemyCtrlActive = false;
             chosenMon = null;
             chosenMove = null;
+            chosenItem = null;
             enemyMoves.Clear();
             inputDisabled = false;
 
             AvailableActionsMsg msg = new AvailableActionsMsg();
             setupMonButtons(msg.pokemon);
             setupMoveButtons(msg.moves);
-            //TODO: item buttons
+            setupItemButtons(msg.items);
             string json = JsonConvert.SerializeObject(msg, Formatting.None);
             wsClient.SendMessage(json);
-
         }
 
         WsClient wsClient = new WsClient();
@@ -271,14 +277,14 @@ namespace BizHawk.Tool.CrystalCtrl
 
                     AvailableActionsMsg msg = new AvailableActionsMsg();
                     msg.pokemon = readEnemyParty();
+                    msg.items = readEnemyItems();
                     foreach(byte moveId in enemyMoves){
                         msg.moves.Add(DataHelpers.moveName(moveId));
                     }
 
-                    //TODO: read available pokemon to switch to.
-                    // Should be trivial to read from WRAM party data
                     setupMoveButtons(msg.moves);
-                    //setupMonButtons(msg.pokemon)
+                    setupItemButtons(msg.items);
+
                     string json = JsonConvert.SerializeObject(msg, Formatting.None);
                     wsClient.SendMessage(json);
                     Console.WriteLine("sending: " + json);
@@ -413,6 +419,13 @@ namespace BizHawk.Tool.CrystalCtrl
             return partyInfo;
         }
 
+        private List<string> readEnemyItems()
+        {
+            var itemIds = _maybeMemAPI.ReadByteRange(EnemyTrainerItem1, 2, "System Bus");
+            itemIds.RemoveAll(id => id == 0);
+            return itemIds.ConvertAll<string>(id => DataHelpers.itemName(id));
+        }
+
         //
         private static MsgsCommon.Status readStatusFlags(byte statusFlags){
             // Looks like psn burn, frz, par are single bits, but sleep is 3 bits 
@@ -545,6 +558,30 @@ namespace BizHawk.Tool.CrystalCtrl
             btnMon5.Enabled = true;
         }
 
+        private void setupItemButtons(List<string> items)
+        {
+            foreach (Control ctrl in grpItems.Controls)
+            {
+                ctrl.Enabled = false;
+                ctrl.Text = "";
+            }
+            if (items.Count < 1)
+            {
+                return;
+            }
+
+            btnItem0.Text = $"{items[0]}";
+            btnItem0.Enabled = true;
+
+            if (items.Count < 2)
+            {
+                return;
+            }
+
+            btnItem1.Text = $"{items[1]}";
+            btnItem1.Enabled = true;
+        }
+
 		public bool AskSaveChanges() => true;
 
 		public void UpdateValues(ToolFormUpdateType type)
@@ -598,11 +635,6 @@ namespace BizHawk.Tool.CrystalCtrl
 
         private void InitializeComponent()
         {
-            this.grpMoves = new System.Windows.Forms.GroupBox();
-            this.btnMove3 = new System.Windows.Forms.Button();
-            this.btnMove2 = new System.Windows.Forms.Button();
-            this.btnMove1 = new System.Windows.Forms.Button();
-            this.btnMove0 = new System.Windows.Forms.Button();
             this.grpMons = new System.Windows.Forms.GroupBox();
             this.btnMon5 = new System.Windows.Forms.Button();
             this.btnMon4 = new System.Windows.Forms.Button();
@@ -614,66 +646,18 @@ namespace BizHawk.Tool.CrystalCtrl
             this.chkJoypadDisable = new System.Windows.Forms.CheckBox();
             this.btnConnect = new System.Windows.Forms.Button();
             this.btnTestSend = new System.Windows.Forms.Button();
-            this.grpMoves.SuspendLayout();
+            this.btnMove0 = new System.Windows.Forms.Button();
+            this.btnMove1 = new System.Windows.Forms.Button();
+            this.btnMove2 = new System.Windows.Forms.Button();
+            this.btnMove3 = new System.Windows.Forms.Button();
+            this.grpMoves = new System.Windows.Forms.GroupBox();
+            this.grpItems = new System.Windows.Forms.GroupBox();
+            this.btnItem1 = new System.Windows.Forms.Button();
+            this.btnItem0 = new System.Windows.Forms.Button();
             this.grpMons.SuspendLayout();
+            this.grpMoves.SuspendLayout();
+            this.grpItems.SuspendLayout();
             this.SuspendLayout();
-            // 
-            // grpMoves
-            // 
-            this.grpMoves.Controls.Add(this.btnMove3);
-            this.grpMoves.Controls.Add(this.btnMove2);
-            this.grpMoves.Controls.Add(this.btnMove1);
-            this.grpMoves.Controls.Add(this.btnMove0);
-            this.grpMoves.Location = new System.Drawing.Point(12, 12);
-            this.grpMoves.Name = "grpMoves";
-            this.grpMoves.Size = new System.Drawing.Size(169, 81);
-            this.grpMoves.TabIndex = 0;
-            this.grpMoves.TabStop = false;
-            this.grpMoves.Text = "Moves";
-            // 
-            // btnMove3
-            // 
-            this.btnMove3.Enabled = false;
-            this.btnMove3.Location = new System.Drawing.Point(87, 48);
-            this.btnMove3.Name = "btnMove3";
-            this.btnMove3.Size = new System.Drawing.Size(75, 23);
-            this.btnMove3.TabIndex = 0;
-            this.btnMove3.Text = "Move 3";
-            this.btnMove3.UseVisualStyleBackColor = true;
-            this.btnMove3.Click += new System.EventHandler(this.btnMove3_Click);
-            // 
-            // btnMove2
-            // 
-            this.btnMove2.Enabled = false;
-            this.btnMove2.Location = new System.Drawing.Point(6, 48);
-            this.btnMove2.Name = "btnMove2";
-            this.btnMove2.Size = new System.Drawing.Size(75, 23);
-            this.btnMove2.TabIndex = 0;
-            this.btnMove2.Text = "Move 2";
-            this.btnMove2.UseVisualStyleBackColor = true;
-            this.btnMove2.Click += new System.EventHandler(this.btnMove2_Click);
-            // 
-            // btnMove1
-            // 
-            this.btnMove1.Enabled = false;
-            this.btnMove1.Location = new System.Drawing.Point(87, 19);
-            this.btnMove1.Name = "btnMove1";
-            this.btnMove1.Size = new System.Drawing.Size(75, 23);
-            this.btnMove1.TabIndex = 0;
-            this.btnMove1.Text = "Move 1";
-            this.btnMove1.UseVisualStyleBackColor = true;
-            this.btnMove1.Click += new System.EventHandler(this.btnMove1_Click);
-            // 
-            // btnMove0
-            // 
-            this.btnMove0.Enabled = false;
-            this.btnMove0.Location = new System.Drawing.Point(6, 19);
-            this.btnMove0.Name = "btnMove0";
-            this.btnMove0.Size = new System.Drawing.Size(75, 23);
-            this.btnMove0.TabIndex = 0;
-            this.btnMove0.Text = "Move 0";
-            this.btnMove0.UseVisualStyleBackColor = true;
-            this.btnMove0.Click += new System.EventHandler(this.btnMove0_Click);
             // 
             // grpMons
             // 
@@ -685,16 +669,16 @@ namespace BizHawk.Tool.CrystalCtrl
             this.grpMons.Controls.Add(this.btnMon0);
             this.grpMons.Location = new System.Drawing.Point(12, 99);
             this.grpMons.Name = "grpMons";
-            this.grpMons.Size = new System.Drawing.Size(169, 115);
+            this.grpMons.Size = new System.Drawing.Size(242, 115);
             this.grpMons.TabIndex = 1;
             this.grpMons.TabStop = false;
             this.grpMons.Text = "Pokemon";
             // 
             // btnMon5
             // 
-            this.btnMon5.Location = new System.Drawing.Point(87, 77);
+            this.btnMon5.Location = new System.Drawing.Point(121, 77);
             this.btnMon5.Name = "btnMon5";
-            this.btnMon5.Size = new System.Drawing.Size(75, 23);
+            this.btnMon5.Size = new System.Drawing.Size(115, 23);
             this.btnMon5.TabIndex = 0;
             this.btnMon5.Text = "Mon 5";
             this.btnMon5.UseVisualStyleBackColor = true;
@@ -704,7 +688,7 @@ namespace BizHawk.Tool.CrystalCtrl
             // 
             this.btnMon4.Location = new System.Drawing.Point(6, 77);
             this.btnMon4.Name = "btnMon4";
-            this.btnMon4.Size = new System.Drawing.Size(75, 23);
+            this.btnMon4.Size = new System.Drawing.Size(109, 23);
             this.btnMon4.TabIndex = 0;
             this.btnMon4.Text = "Mon 4";
             this.btnMon4.UseVisualStyleBackColor = true;
@@ -712,9 +696,9 @@ namespace BizHawk.Tool.CrystalCtrl
             // 
             // btnMon3
             // 
-            this.btnMon3.Location = new System.Drawing.Point(87, 48);
+            this.btnMon3.Location = new System.Drawing.Point(121, 48);
             this.btnMon3.Name = "btnMon3";
-            this.btnMon3.Size = new System.Drawing.Size(75, 23);
+            this.btnMon3.Size = new System.Drawing.Size(115, 23);
             this.btnMon3.TabIndex = 0;
             this.btnMon3.Text = "Mon 3";
             this.btnMon3.UseVisualStyleBackColor = true;
@@ -724,7 +708,7 @@ namespace BizHawk.Tool.CrystalCtrl
             // 
             this.btnMon2.Location = new System.Drawing.Point(6, 48);
             this.btnMon2.Name = "btnMon2";
-            this.btnMon2.Size = new System.Drawing.Size(75, 23);
+            this.btnMon2.Size = new System.Drawing.Size(109, 23);
             this.btnMon2.TabIndex = 0;
             this.btnMon2.Text = "Mon 2";
             this.btnMon2.UseVisualStyleBackColor = true;
@@ -732,9 +716,9 @@ namespace BizHawk.Tool.CrystalCtrl
             // 
             // btnMon1
             // 
-            this.btnMon1.Location = new System.Drawing.Point(87, 19);
+            this.btnMon1.Location = new System.Drawing.Point(121, 19);
             this.btnMon1.Name = "btnMon1";
-            this.btnMon1.Size = new System.Drawing.Size(75, 23);
+            this.btnMon1.Size = new System.Drawing.Size(115, 23);
             this.btnMon1.TabIndex = 0;
             this.btnMon1.Text = "Mon 1";
             this.btnMon1.UseVisualStyleBackColor = true;
@@ -744,7 +728,7 @@ namespace BizHawk.Tool.CrystalCtrl
             // 
             this.btnMon0.Location = new System.Drawing.Point(6, 19);
             this.btnMon0.Name = "btnMon0";
-            this.btnMon0.Size = new System.Drawing.Size(75, 23);
+            this.btnMon0.Size = new System.Drawing.Size(109, 23);
             this.btnMon0.TabIndex = 0;
             this.btnMon0.Text = "Mon 0";
             this.btnMon0.UseVisualStyleBackColor = true;
@@ -753,7 +737,7 @@ namespace BizHawk.Tool.CrystalCtrl
             // lblCurrentState
             // 
             this.lblCurrentState.AutoSize = true;
-            this.lblCurrentState.Location = new System.Drawing.Point(18, 221);
+            this.lblCurrentState.Location = new System.Drawing.Point(15, 304);
             this.lblCurrentState.Name = "lblCurrentState";
             this.lblCurrentState.Size = new System.Drawing.Size(85, 13);
             this.lblCurrentState.TabIndex = 2;
@@ -762,7 +746,7 @@ namespace BizHawk.Tool.CrystalCtrl
             // chkJoypadDisable
             // 
             this.chkJoypadDisable.AutoSize = true;
-            this.chkJoypadDisable.Location = new System.Drawing.Point(30, 256);
+            this.chkJoypadDisable.Location = new System.Drawing.Point(27, 339);
             this.chkJoypadDisable.Name = "chkJoypadDisable";
             this.chkJoypadDisable.Size = new System.Drawing.Size(131, 17);
             this.chkJoypadDisable.TabIndex = 3;
@@ -772,7 +756,7 @@ namespace BizHawk.Tool.CrystalCtrl
             // 
             // btnConnect
             // 
-            this.btnConnect.Location = new System.Drawing.Point(18, 296);
+            this.btnConnect.Location = new System.Drawing.Point(15, 379);
             this.btnConnect.Name = "btnConnect";
             this.btnConnect.Size = new System.Drawing.Size(75, 23);
             this.btnConnect.TabIndex = 4;
@@ -782,7 +766,7 @@ namespace BizHawk.Tool.CrystalCtrl
             // 
             // btnTestSend
             // 
-            this.btnTestSend.Location = new System.Drawing.Point(106, 296);
+            this.btnTestSend.Location = new System.Drawing.Point(103, 379);
             this.btnTestSend.Name = "btnTestSend";
             this.btnTestSend.Size = new System.Drawing.Size(75, 23);
             this.btnTestSend.TabIndex = 4;
@@ -790,9 +774,100 @@ namespace BizHawk.Tool.CrystalCtrl
             this.btnTestSend.UseVisualStyleBackColor = true;
             this.btnTestSend.Click += new System.EventHandler(this.btnTestSend_Click);
             // 
+            // btnMove0
+            // 
+            this.btnMove0.Enabled = false;
+            this.btnMove0.Location = new System.Drawing.Point(6, 19);
+            this.btnMove0.Name = "btnMove0";
+            this.btnMove0.Size = new System.Drawing.Size(109, 23);
+            this.btnMove0.TabIndex = 0;
+            this.btnMove0.Text = "Move 0";
+            this.btnMove0.UseVisualStyleBackColor = true;
+            this.btnMove0.Click += new System.EventHandler(this.btnMove0_Click);
+            // 
+            // btnMove1
+            // 
+            this.btnMove1.Enabled = false;
+            this.btnMove1.Location = new System.Drawing.Point(121, 19);
+            this.btnMove1.Name = "btnMove1";
+            this.btnMove1.Size = new System.Drawing.Size(115, 23);
+            this.btnMove1.TabIndex = 0;
+            this.btnMove1.Text = "Move 1";
+            this.btnMove1.UseVisualStyleBackColor = true;
+            this.btnMove1.Click += new System.EventHandler(this.btnMove1_Click);
+            // 
+            // btnMove2
+            // 
+            this.btnMove2.Enabled = false;
+            this.btnMove2.Location = new System.Drawing.Point(6, 48);
+            this.btnMove2.Name = "btnMove2";
+            this.btnMove2.Size = new System.Drawing.Size(109, 23);
+            this.btnMove2.TabIndex = 0;
+            this.btnMove2.Text = "Move 2";
+            this.btnMove2.UseVisualStyleBackColor = true;
+            this.btnMove2.Click += new System.EventHandler(this.btnMove2_Click);
+            // 
+            // btnMove3
+            // 
+            this.btnMove3.Enabled = false;
+            this.btnMove3.Location = new System.Drawing.Point(121, 48);
+            this.btnMove3.Name = "btnMove3";
+            this.btnMove3.Size = new System.Drawing.Size(115, 23);
+            this.btnMove3.TabIndex = 0;
+            this.btnMove3.Text = "Move 3";
+            this.btnMove3.UseVisualStyleBackColor = true;
+            this.btnMove3.Click += new System.EventHandler(this.btnMove3_Click);
+            // 
+            // grpMoves
+            // 
+            this.grpMoves.Controls.Add(this.btnMove3);
+            this.grpMoves.Controls.Add(this.btnMove2);
+            this.grpMoves.Controls.Add(this.btnMove1);
+            this.grpMoves.Controls.Add(this.btnMove0);
+            this.grpMoves.Location = new System.Drawing.Point(12, 12);
+            this.grpMoves.Name = "grpMoves";
+            this.grpMoves.Size = new System.Drawing.Size(242, 81);
+            this.grpMoves.TabIndex = 0;
+            this.grpMoves.TabStop = false;
+            this.grpMoves.Text = "Moves";
+            // 
+            // grpItems
+            // 
+            this.grpItems.Controls.Add(this.btnItem1);
+            this.grpItems.Controls.Add(this.btnItem0);
+            this.grpItems.Location = new System.Drawing.Point(9, 220);
+            this.grpItems.Name = "grpItems";
+            this.grpItems.Size = new System.Drawing.Size(245, 54);
+            this.grpItems.TabIndex = 5;
+            this.grpItems.TabStop = false;
+            this.grpItems.Text = "Items";
+            // 
+            // btnItem1
+            // 
+            this.btnItem1.Enabled = false;
+            this.btnItem1.Location = new System.Drawing.Point(124, 19);
+            this.btnItem1.Name = "btnItem1";
+            this.btnItem1.Size = new System.Drawing.Size(115, 23);
+            this.btnItem1.TabIndex = 0;
+            this.btnItem1.Text = "Item 1";
+            this.btnItem1.UseVisualStyleBackColor = true;
+            this.btnItem1.Click += new System.EventHandler(this.btnItem1_Click);
+            // 
+            // btnItem0
+            // 
+            this.btnItem0.Enabled = false;
+            this.btnItem0.Location = new System.Drawing.Point(6, 19);
+            this.btnItem0.Name = "btnItem0";
+            this.btnItem0.Size = new System.Drawing.Size(112, 23);
+            this.btnItem0.TabIndex = 0;
+            this.btnItem0.Text = "Item 0";
+            this.btnItem0.UseVisualStyleBackColor = true;
+            this.btnItem0.Click += new System.EventHandler(this.btnItem0_Click);
+            // 
             // CrystalAiForm
             // 
-            this.ClientSize = new System.Drawing.Size(241, 349);
+            this.ClientSize = new System.Drawing.Size(268, 460);
+            this.Controls.Add(this.grpItems);
             this.Controls.Add(this.btnTestSend);
             this.Controls.Add(this.btnConnect);
             this.Controls.Add(this.chkJoypadDisable);
@@ -800,8 +875,9 @@ namespace BizHawk.Tool.CrystalCtrl
             this.Controls.Add(this.grpMons);
             this.Controls.Add(this.grpMoves);
             this.Name = "CrystalAiForm";
-            this.grpMoves.ResumeLayout(false);
             this.grpMons.ResumeLayout(false);
+            this.grpMoves.ResumeLayout(false);
+            this.grpItems.ResumeLayout(false);
             this.ResumeLayout(false);
             this.PerformLayout();
 
@@ -859,6 +935,12 @@ namespace BizHawk.Tool.CrystalCtrl
             chosenMove = index;
             InputDisable(false);
         }
+        private void chooseItem(int index)
+        {
+            //TODO: Implement - item selection in appropriate callback
+            chosenItem = index;
+            InputDisable(false);
+        }
 
         private void btnMove0_Click(object sender, EventArgs e)
         {
@@ -878,6 +960,15 @@ namespace BizHawk.Tool.CrystalCtrl
         private void btnMove3_Click(object sender, EventArgs e)
         {
             ChooseMove(3);
+        }
+        private void btnItem0_Click(object sender, EventArgs e)
+        {
+            chooseItem(0);
+        }
+
+        private void btnItem1_Click(object sender, EventArgs e)
+        {
+            chooseItem(1);
         }
 
         private void btnConnect_Click(object sender, EventArgs e)
@@ -940,9 +1031,12 @@ namespace BizHawk.Tool.CrystalCtrl
                     break;
                 case MsgsCommon.ActionType.useItem:
                     //TODO: handle item
+                    chooseItem(chosenAction.actionIndex);
                     break;
             }
         }
+
+
     }
 
 }
