@@ -125,7 +125,6 @@ namespace BizHawk.Tool.CrystalCtrl
         const UInt16 BattleMenu = 0x6139;
         const UInt16 SwitchOrTryItemOk = 0x4032;
         private CheckBox chkJoypadDisable;
-        //private bool battleModeChanged = false;
 
         const UInt16 RomBank = 0xff9d;
 
@@ -158,12 +157,8 @@ namespace BizHawk.Tool.CrystalCtrl
             enemyMoves.Clear();
             inputDisabled = false;
 
-            AvailableActionsMsg msg = new AvailableActionsMsg();
-            setupMonButtons(msg.pokemon);
-            setupMoveButtons(msg.moves);
-            setupItemButtons(msg.items);
-            string json = JsonConvert.SerializeObject(msg, Formatting.None);
-            wsClient.SendMessage(json);
+            //Send blank available acitons msg
+            updateClientActions(new AvailableActionsMsg());
         }
 
         WsClient wsClient = new WsClient();
@@ -281,13 +276,7 @@ namespace BizHawk.Tool.CrystalCtrl
                     foreach(byte moveId in enemyMoves){
                         msg.moves.Add(DataHelpers.moveName(moveId));
                     }
-
-                    setupMoveButtons(msg.moves);
-                    setupItemButtons(msg.items);
-
-                    string json = JsonConvert.SerializeObject(msg, Formatting.None);
-                    wsClient.SendMessage(json);
-                    Console.WriteLine("sending: " + json);
+                    updateClientActions(msg);
                 }
                 
             }, LoadEnemyMonRet, "System Bus");
@@ -359,16 +348,10 @@ namespace BizHawk.Tool.CrystalCtrl
                 //TODO: check for variable "enemyNextMon" (different from switchMon)
                 if (enemyCtrlActive && _maybeMemAPI.ReadByte(RomBank, "System Bus") == 0x0E)
                 {
-                    var partyInfo = readEnemyParty();
-
-                    //update GUI and send info to browser
-                    setupMonButtons(partyInfo);
                     //only pokemon selection is available (no moves or items)
                     AvailableActionsMsg availActions = new AvailableActionsMsg();
-                    availActions.pokemon = partyInfo;
-                    string json = JsonConvert.SerializeObject(availActions, Formatting.None);
-                    wsClient.SendMessage(json);
-                    Console.WriteLine("sending: " + json);
+                    availActions.pokemon = readEnemyParty();
+                    updateClientActions(availActions);
 
                 }
             }, ReadTrainerPartyDone, "System Bus");
@@ -396,12 +379,9 @@ namespace BizHawk.Tool.CrystalCtrl
 
         
         private List<MsgsCommon.MonInfo> readEnemyParty(){
-            //Read enemy party pokemon names - already doing this in another piece of code (above)
-
             var partyCount = _maybeMemAPI.ReadByte(OTPartyCount, "System Bus");
 
             //TODO: maybe better to single byte range, rather than multiple API calls?
-            var availActions = new AvailableActionsMsg();
             var partyInfo = new List<MsgsCommon.MonInfo>();
             for (uint i = 0; i < partyCount; i++)
             {
@@ -426,7 +406,6 @@ namespace BizHawk.Tool.CrystalCtrl
             return itemIds.ConvertAll<string>(id => DataHelpers.itemName(id));
         }
 
-        //
         private static MsgsCommon.Status readStatusFlags(byte statusFlags){
             // Looks like psn burn, frz, par are single bits, but sleep is 3 bits 
             //TODO: I think looks like this - need to confirm.
@@ -466,8 +445,6 @@ namespace BizHawk.Tool.CrystalCtrl
 
         private void setupMoveButtons(List<string> moveIds)
         {
-            //TODO: translate move hex codes into strings (before enter this functino )
-            //TODO: put buttons in a list to simply function
             Console.WriteLine("Setting up move buttons");
 
             //Check if connected to websocket, send JSON to server.
@@ -507,7 +484,6 @@ namespace BizHawk.Tool.CrystalCtrl
             btnMove3.Enabled = true;
         }
 
-        //takes in list of pokemon IDs for enemy party.
         private void setupMonButtons(List<MsgsCommon.MonInfo> monIDs)
         {
             Console.WriteLine("setting up enemy mon buttons");
@@ -596,27 +572,6 @@ namespace BizHawk.Tool.CrystalCtrl
                     
                     break;
                 case ToolFormUpdateType.PostFrame:
-                    //if (battleModeChanged)
-                    //{
-                    //    //check mem address
-                    //    var currMode = _maybeMemAPI.ReadByte(BattleMode);
-                    //    switch (currMode)
-                    //    {
-                    //        case 0x00:
-                    //            Console.WriteLine("BattleMode: Overworld");
-                    //            break;
-                    //        case 0x01:
-                    //            Console.WriteLine("BattleMode: Wild Mon");
-                    //            break;
-                    //        case 0x02:
-                    //            Console.WriteLine("Battlemode: Trainer ----");
-                    //            break;
-                    //        default:
-                    //            Console.WriteLine($"Battlemode: unknown ({currMode})");
-                    //            break;
-                    //    }
-                    //    battleModeChanged = false;
-                    //}
                     break;
                 default:
                     break;
@@ -883,11 +838,6 @@ namespace BizHawk.Tool.CrystalCtrl
 
         }
 
-        //TODO: btnMonN_Clicks should be used for two things:
-        // - choosing next pokemon, after a faint or start of match
-        // - chooisng next action (e.g. choosing to switch instead of using a move.
-
-        //I think can handle both with a chosenMon variable
         private void btnMon0_Click(object sender, EventArgs e)
         {
             ChooseMon(0);
@@ -975,7 +925,7 @@ namespace BizHawk.Tool.CrystalCtrl
         {
             Console.WriteLine("connecting to ws");
 
-            //TODO: make configurable
+            //TODO: make url configurable
             var connectTask = wsClient.Connect(new Uri("ws://localhost:8999/?type=emulator"));
             connectTask.ContinueWith((task) =>
             {
@@ -1034,6 +984,18 @@ namespace BizHawk.Tool.CrystalCtrl
                     chooseItem(chosenAction.actionIndex);
                     break;
             }
+        }
+
+        private void updateClientActions(AvailableActionsMsg availableActions)
+        {
+            //update plugin UI
+            setupItemButtons(availableActions.items);
+            setupMonButtons(availableActions.pokemon);
+            setupMoveButtons(availableActions.moves);
+
+            //Send message to browser to updatae web client
+            string json = JsonConvert.SerializeObject(availableActions, Formatting.None);
+            wsClient.SendMessage(json);
         }
 
 
