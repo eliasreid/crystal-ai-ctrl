@@ -89,6 +89,7 @@ namespace BizHawk.Tool.CrystalCtrl
         const UInt16 ExitBattle = 0x769e;
         const UInt16 ParseEnemyAction = 0x67C1;
         const UInt16 BattleMenu = 0x6139;
+        const UInt16 SwitchOrTryItem = 0x4000;
         const UInt16 SwitchOrTryItemOk = 0x4032;
         private CheckBox chkJoypadDisable;
 
@@ -99,16 +100,23 @@ namespace BizHawk.Tool.CrystalCtrl
         //Data for switching logic
         const UInt16 EnemySwitchMonIndex = 0xc718;
         const UInt16 AiTrySwitch = 0x444B;
+        const UInt16 DontSwitch = 0x4041;
         const UInt16 DontSwitchRet = 0x4044;
 
         const UInt16 ReadTrainerPartyDone = 0x57d0;
 
         const UInt16 EnemyTrainerItem1 = 0xc650;
+        const UInt16 EnemyTrainerItem2 = 0xc651;
+        const UInt16 AI_TryItem = 0x4105;
+        const UInt16 AI_TryItemHasItem = 0x413f;
+        const UInt16 AI_ItemsHealItem = 0x422c;
+        const UInt16 AI_ItemsUse = 0x4385;
+        const UInt16 AI_Items = 0x4196;
 
         //TOOD: inBattle should be "controllingBattle" - thta way we can start with false, even if start in middle of battle, 
         //Will just start working on next battle
         private bool enemyCtrlActive = false;
-        private ChosenActionMsg currentChosenAction = null;
+        private ChosenActionMsg? currentChosenAction = null;
         private List<byte> enemyMoves = new List<byte>();
         bool inputDisabled = false;
 
@@ -145,6 +153,8 @@ namespace BizHawk.Tool.CrystalCtrl
         /// </summary>
         public void Restart() {
 
+            resetBattleState();
+
             wsClient.MessageReceiveCallback( data =>
             {
                 string msgString = Encoding.UTF8.GetString(data.Array, 0, data.Count);
@@ -174,12 +184,14 @@ namespace BizHawk.Tool.CrystalCtrl
                 Console.WriteLine($"{entry.Key}");
             }
 
+            //reset varts when save state is loaded, otherwise get into weird state.
+            //As a conseqeunce, have to wait until next battle start to regain control
             _maybeClientAPI.StateLoaded += (_, _) =>
             {
                 resetBattleState();
             };
 
-            //set inBattle flag when enemy trainer is inited
+            //set inBattle flag when enemy trainer is initialized
             //TODO: eventually meaning will change - only set inBattle if enemy is being controlled by net / ui, etc
             _maybeMemoryEventsAPI.AddExecCallback((_, _, _) => {
                 enemyCtrlActive = true;
@@ -189,30 +201,7 @@ namespace BizHawk.Tool.CrystalCtrl
             _maybeMemoryEventsAPI.AddExecCallback((_, _, _) => {
                 enemyCtrlActive = false;
                 Console.WriteLine("Exit battle called");
-            }, ExitBattle, "System Bus");            
-
-            _maybeMemoryEventsAPI.AddExecCallback((_, _, _) => {
-
-                if (enemyCtrlActive && _maybeMemAPI.ReadByte(RomBank, "System Bus") == 0x0E)
-                {
-                    if(currentChosenAction?.actionType == MsgsCommon.ActionType.pokemonSwitch)
-                    {
-                        //Try jumping to AI_TrySwitch with wEnemySwitchMonIndexSet
-                        _maybeEmuAPI.SetRegister("PC", AiTrySwitch);
-
-                        //TOOD: make sure works, I think index is actually 1-6
-                        Console.WriteLine($"Switching mon to index: {currentChosenAction.actionIndex}");
-                        _maybeMemAPI.WriteByte(EnemySwitchMonIndex, (uint)currentChosenAction.actionIndex + 1, "System Bus");
-                        currentChosenAction = null;
-                    }else if (currentChosenAction?.actionType == MsgsCommon.ActionType.useMove)
-                    {
-                        //Jump to return statement in DontSwitch - this is to ensure selected move doesn't get overwritten
-                        // AI choice to use item or switch
-                        Console.WriteLine($"Jumping to DontSwitchRet to ensure item / switch not used");
-                        _maybeEmuAPI.SetRegister("PC", DontSwitchRet);
-                    }
-                }
-            }, SwitchOrTryItemOk, "System Bus");
+            }, ExitBattle, "System Bus");
 
             //Executed when new enemy pokmeon is switched in
             _maybeMemoryEventsAPI.AddExecCallback((_, _, _) =>
@@ -221,25 +210,18 @@ namespace BizHawk.Tool.CrystalCtrl
                 {
                     Console.WriteLine("enemy poke loaded");
                     //Read in move IDs from list - remove moves with id of 0 (represent empty move slots)
-                    // Making the assumption that empty move slots are always at the end...
                     enemyMoves = _maybeMemAPI.ReadByteRange(EnemyMonMoves, 4, "System Bus");
-                    for(int i = 0; i < enemyMoves.Count; i++){
-                        if(enemyMoves[i] == 0){
-                            //cut list off here
-                            enemyMoves.RemoveRange(i, enemyMoves.Count - i);
-                            break;
-                        }
-                    }
+                    enemyMoves.RemoveAll(move => move == 0);
 
                     AvailableActionsMsg msg = new AvailableActionsMsg();
                     msg.pokemon = readEnemyParty();
                     msg.items = readEnemyItems();
-                    foreach(byte moveId in enemyMoves){
+                    foreach (byte moveId in enemyMoves)
+                    {
                         msg.moves.Add(DataHelpers.moveName(moveId));
                     }
                     updateClientActions(msg);
                 }
-                
             }, LoadEnemyMonRet, "System Bus");
 
             //This is where enemy attack is re-written, if enemy selects an attack
@@ -249,13 +231,11 @@ namespace BizHawk.Tool.CrystalCtrl
                 if (enemyCtrlActive)
                 {
                     Console.WriteLine("Parsing enemy action");
-                    if(currentChosenAction?.actionType == MsgsCommon.ActionType.useMove)
+                    if (currentChosenAction?.actionType == MsgsCommon.ActionType.useMove)
                     {
-                        //TODO: So I also have to force enemy AI NOT to use item or swi
                         Console.WriteLine("Overwriting enemy move with chosen move");
                         _maybeMemAPI.WriteByte(EnemyCurrentMove, enemyMoves[currentChosenAction.actionIndex], "System Bus");
                         _maybeMemAPI.WriteByte(EnemyCurrentMoveNum, (uint)currentChosenAction.actionIndex, "System Bus");
-                        currentChosenAction = null;
                     }
                     else
                     {
@@ -265,12 +245,119 @@ namespace BizHawk.Tool.CrystalCtrl
 
             }, ParseEnemyAction, "System Bus");
 
+            //If opponent has chosen to use a move, exit immediately from AI_SwitchOrTryItem
+            //function, so that the move decision doesn't get overriden with a item or switch
+            _maybeMemoryEventsAPI.AddExecCallback((_, _, _) => {
+
+                if (enemyCtrlActive && _maybeMemAPI.ReadByte(RomBank, "System Bus") == 0x0E)
+                {
+                    if (currentChosenAction?.actionType == MsgsCommon.ActionType.useMove)
+                    {
+                        forceReturn();
+                        currentChosenAction = null;
+                    }
+                }
+            }, SwitchOrTryItem, "System Bus");
+
+            _maybeMemoryEventsAPI.AddExecCallback((_, _, _) => {
+
+                if (enemyCtrlActive && _maybeMemAPI.ReadByte(RomBank, "System Bus") == 0x0E)
+                {
+                    //currentChosenAction is null when I am choosing a move.
+                    //Shouldn't this be set?
+                    switch (currentChosenAction?.actionType)
+                    {
+                        case MsgsCommon.ActionType.pokemonSwitch:
+                            //Execute switch by jumping to AI_TrySwitch and setting wEnemySwitchMonIndex to chosen value
+                            _maybeEmuAPI.SetRegister("PC", AiTrySwitch);
+                            Console.WriteLine($"Switching mon to index: {currentChosenAction.actionIndex}");
+                            _maybeMemAPI.WriteByte(EnemySwitchMonIndex, (uint)currentChosenAction.actionIndex + 1, "System Bus");
+                            currentChosenAction = null;
+                            break;
+                        case MsgsCommon.ActionType.useMove:
+                            //Jump to return statement in DontSwitch - this is to ensure selected move doesn't get
+                            // overwritten with AI choice to use item or switch
+                            Console.WriteLine($"Jumping to DontSwitchRet to ensure item / switch not used");
+                            _maybeEmuAPI.SetRegister("PC", DontSwitchRet);
+                            break;
+                        case MsgsCommon.ActionType.useItem:
+                            // Jump to don't switch, which calls AI_TryItem
+                            // In AI_TryItem, handle selecting item
+                            _maybeEmuAPI.SetRegister("PC", DontSwitch);
+                            Console.WriteLine("using item, jump to don't switch");
+                            break;
+                        case null:
+                            //allow emulation to proceed as normal
+                            break;
+
+                    }
+                }
+            }, SwitchOrTryItemOk, "System Bus");
+
+            _maybeMemoryEventsAPI.AddExecCallback((_, _, _) => {
+                if (enemyCtrlActive && _maybeMemAPI.ReadByte(RomBank, "System Bus") == 0x0E)
+                {
+                    _maybeEmuAPI.SetRegister("PC", AI_TryItemHasItem);
+                    //AI_Items:
+                    //    dbw FULL_RESTORE, .FullRestore
+                    //    dbw MAX_POTION,   .MaxPotion
+                    //    dbw HYPER_POTION, .HyperPotion
+                    //    dbw SUPER_POTION, .SuperPotion
+                    //    dbw POTION,       .Potion
+                    //    dbw X_ACCURACY,   .XAccuracy
+                    //    dbw FULL_HEAL,    .FullHeal
+                    //    dbw GUARD_SPEC,   .GuardSpec
+                    //    dbw DIRE_HIT,     .DireHit
+                    //    dbw X_ATTACK,     .XAttack
+                    //    dbw X_DEFEND,     .XDefend
+                    //    dbw X_SPEED,      .XSpeed
+                    //    dbw X_SPECIAL,    .XSpecial
+
+                    //item ADDRESS to use
+                    var itemAddress = currentChosenAction.actionIndex == 0 ? EnemyTrainerItem1 : EnemyTrainerItem2;
+                    var itemId = _maybeMemAPI.ReadByte(itemAddress, "System Bus");
+
+                    var itemsTable = _maybeMemAPI.ReadByteRange(AI_Items, 13 * 3, "System Bus");
+                    UInt16 rowAddress = 0;
+
+                    for (int i = 0; i < 13; i++)
+                    {
+                        if (itemsTable[i * 3] == itemId) { 
+                            rowAddress = (UInt16)(AI_Items + (UInt16)i *3);
+                            break;
+                        }
+                    }
+
+                    if(rowAddress == 0)
+                    {
+                        Console.WriteLine("something went terribly wrong");
+                        throw new Exception("Failed to modify emulator stuff to force item use, crashing");
+                    }
+
+                    //This should force to "attempt" to use the item, even if ultimately doesnt use
+                    //due to pokemon status, trianer tendencies, etc.
+                    set16BitRegister(itemAddress, "D", "E");
+                    set16BitRegister(rowAddress, "H", "L");
+                    Console.WriteLine("addresses set, should be forcing ot attempt to use item");
+                }
+            }, AI_TryItem, "System Bus");
+
+            //TODO: other callbacks to handle different items types (to elim randomness)
+            // Status - maybe that's the only other?
+            _maybeMemoryEventsAPI.AddExecCallback((_, _, _) =>
+            {
+                if (enemyCtrlActive && _maybeMemAPI.ReadByte(RomBank, "System Bus") == 0x0E)
+                {
+                    Console.WriteLine("using a healing item");
+                    _maybeEmuAPI.SetRegister("PC", (int)AI_ItemsUse);
+                    currentChosenAction = null;
+                }
+            }, AI_ItemsHealItem, "System Bus");          
+            
             //This is where the player enters their battle menu.
             //Pause user input until enemy selects their action
             _maybeMemoryEventsAPI.AddExecCallback((_, _, _) =>
             {
-                //If Enemy has not yet chosen a move
-                //TODO: OR SWITCH / ITEM. ETC - ACTION
                 if (enemyCtrlActive && currentChosenAction == null)
                 {
                     Console.WriteLine("Disabling input, waiting for opponent to select action");
@@ -927,6 +1014,40 @@ namespace BizHawk.Tool.CrystalCtrl
             //Send message to browser to updatae web client
             string json = JsonConvert.SerializeObject(availableActions, Formatting.None);
             wsClient.SendMessage(json);
+        }
+
+        private void set16BitRegister(UInt16 value, string msbRegister, string lsbRegister)
+        {
+            var bytes = BitConverter.GetBytes(value);
+
+            //flip to make sure first byte is higher byte
+            if (BitConverter.IsLittleEndian)
+            {
+                bytes = new byte [] {bytes[1], bytes[0] };
+            }
+
+            _maybeEmuAPI.SetRegister(msbRegister, bytes[0]);
+            _maybeEmuAPI.SetRegister(lsbRegister, bytes[1]);
+        }
+
+        private void forceReturn()
+        {
+            //TODO: can simplify this maybe?
+            UInt16 currentPC = (UInt16)_maybeEmuAPI.GetRegister("PC");
+            byte currentSPl = (byte)_maybeEmuAPI.GetRegister("SPl");
+            byte currentSPh = (byte)_maybeEmuAPI.GetRegister("SPh");
+
+            UInt16 currentSP = BitConverter.IsLittleEndian ? 
+                BitConverter.ToUInt16(new byte[] {currentSPl, currentSPh}, 0) :
+                BitConverter.ToUInt16(new byte[] { currentSPh, currentSPl }, 0);
+
+            //read memory at current SP, set PC to stored address (account for GB endianess)
+            List<byte> retAddress = _maybeMemAPI.ReadByteRange(currentSP, 2, "System Bus");
+            //Flipped because GB stores address in little endian
+            _maybeEmuAPI.SetRegister("PCh", (int)retAddress[1]);
+            _maybeEmuAPI.SetRegister("PCl", (int)retAddress[0]);
+            UInt16 newSP = (UInt16)(currentSP + 2);
+            set16BitRegister(newSP, "SPh", "SPl");
         }
 
     }
