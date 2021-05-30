@@ -74,6 +74,8 @@ namespace BizHawk.Tool.CrystalCtrl
         UInt16 EnemyCurrentMove = 0xC6E4;
 
         UInt16 LoadEnemyMonToSwitchTo = 0x56CA;
+        UInt16 BattleTurn = 0x412F;
+        
 
         const UInt16 OTPartyMon1Species = 0xd288;
         const UInt16 OTPartyMon1Status = 0xd2a8;
@@ -118,14 +120,12 @@ namespace BizHawk.Tool.CrystalCtrl
         //Will just start working on next battle
         private bool enemyCtrlActive = false;
         private ChosenActionMsg? currentChosenAction = null;
-        private List<byte> enemyMoves = new List<byte>();
         bool inputDisabled = false;
 
         private void resetBattleState()
         {
             enemyCtrlActive = false;
             currentChosenAction = null;
-            enemyMoves.Clear();
             inputDisabled = false;
 
             //Send blank available acitons msg
@@ -207,23 +207,20 @@ namespace BizHawk.Tool.CrystalCtrl
             //Executed when new enemy pokmeon is switched in
             _maybeMemoryEventsAPI.AddExecCallback((_, _, _) =>
             {
-                if (enemyCtrlActive)
+                if (enemyCtrlActive && _maybeMemAPI.ReadByte(RomBank, "System Bus") == 0x0F)
                 {
-                    Console.WriteLine("enemy poke loaded");
-                    //Read in move IDs from list - remove moves with id of 0 (represent empty move slots)
-                    enemyMoves = _maybeMemAPI.ReadByteRange(EnemyMonMoves, 4, "System Bus");
-                    enemyMoves.RemoveAll(move => move == 0);
-
+                    Console.WriteLine("new turn, disabling input and sending out updated actions");
+                    //Disable player input until receive response from enemy controller
+                    InputDisable(true);
+                    
                     AvailableActionsMsg msg = new AvailableActionsMsg();
                     msg.pokemon = readEnemyParty();
+                    msg.moves = readEnemyMoves();
                     msg.items = readEnemyItems();
-                    foreach (byte moveId in enemyMoves)
-                    {
-                        msg.moves.Add(DataHelpers.moveName(moveId));
-                    }
                     updateClientActions(msg);
                 }
-            }, LoadEnemyMonRet, "System Bus");
+            }, BattleTurn, "System Bus");
+
 
             //This is where enemy attack is re-written, if enemy selects an attack
             _maybeMemoryEventsAPI.AddExecCallback((_, _, _) =>
@@ -235,7 +232,10 @@ namespace BizHawk.Tool.CrystalCtrl
                     if (currentChosenAction?.actionType == MsgsCommon.ActionType.useMove)
                     {
                         Console.WriteLine("Overwriting enemy move with chosen move");
-                        _maybeMemAPI.WriteByte(EnemyCurrentMove, enemyMoves[currentChosenAction.actionIndex], "System Bus");
+
+                    //TODO: read move from index 
+                        var moveId = _maybeMemAPI.ReadByte(EnemyMonMoves + currentChosenAction.actionIndex, "System Bus");
+                        _maybeMemAPI.WriteByte(EnemyCurrentMove, moveId, "System Bus");
                         _maybeMemAPI.WriteByte(EnemyCurrentMoveNum, (uint)currentChosenAction.actionIndex, "System Bus");
                     }
                     else
@@ -466,6 +466,19 @@ namespace BizHawk.Tool.CrystalCtrl
             var itemIds = _maybeMemAPI.ReadByteRange(EnemyTrainerItem1, 2, "System Bus");
             itemIds.RemoveAll(id => id == 0);
             return itemIds.ConvertAll<string>(id => DataHelpers.itemName(id));
+        }
+
+        private List<string> readEnemyMoves()
+        {
+            //Read in move IDs from list - remove moves with id of 0 (represent empty move slots)
+            var moveIds = _maybeMemAPI.ReadByteRange(EnemyMonMoves, 4, "System Bus");
+            moveIds.RemoveAll(move => move == 0);
+            var moveStrings = new List<string>();
+            foreach (byte moveId in moveIds)
+            {
+                moveStrings.Add(DataHelpers.moveName(moveId));
+            }
+            return moveStrings;
         }
 
         private static MsgsCommon.Status readStatusFlags(byte statusFlags){
@@ -1011,8 +1024,11 @@ namespace BizHawk.Tool.CrystalCtrl
 
         //For handling moves chosen from browser client or ui buttons
         private void handleChosenAction(ChosenActionMsg chosenAction){
-            currentChosenAction = chosenAction;
-            InputDisable(false);
+            if(currentChosenAction == null)
+            {
+                currentChosenAction = chosenAction;
+                InputDisable(false);
+            }
         }
 
         private void updateClientActions(AvailableActionsMsg availableActions)
