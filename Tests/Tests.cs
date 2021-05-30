@@ -8,6 +8,17 @@ namespace Tests
     [TestClass]
     public class Tests
     {
+        private TestContext testContextInstance;
+
+        /// <summary>
+        /// Gets or sets the test context which provides
+        /// information about and functionality for the current test run.
+        /// </summary>
+        public TestContext TestContext
+        {
+            get { return testContextInstance; }
+            set { testContextInstance = value; }
+        }
 
         [TestMethod] 
         public void PokemonNamesTest()
@@ -29,6 +40,22 @@ namespace Tests
             Assert.AreEqual("No Item", DataHelpers.itemName(0));
             Assert.AreEqual("Master Ball", DataHelpers.itemName(1));
             Assert.AreEqual("Antidote", DataHelpers.itemName(9));
+        }
+
+        [TestMethod]
+        public void ActionMsg()
+        {
+            var msg = new AvailableActionsMsg();
+
+            msg.moves = new List<string> { "tackle" };
+            msg.pokemon = new List<MsgsCommon.MonInfo> { new MsgsCommon.MonInfo("pikachu", MsgsCommon.Status.none) };
+            msg.items = new List<string> { "hyper potion" };
+
+            string json = JsonConvert.SerializeObject(msg, Formatting.None);
+
+            TestContext.WriteLine(json);
+
+
         }
 
         //msg tests
