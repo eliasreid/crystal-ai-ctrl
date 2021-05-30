@@ -110,6 +110,7 @@ namespace BizHawk.Tool.CrystalCtrl
         const UInt16 AI_TryItem = 0x4105;
         const UInt16 AI_TryItemHasItem = 0x413f;
         const UInt16 AI_ItemsHealItem = 0x422c;
+        const UInt16 AI_ItemsStatus = 0x41ca;
         const UInt16 AI_ItemsUse = 0x4385;
         const UInt16 AI_Items = 0x4196;
 
@@ -346,14 +347,26 @@ namespace BizHawk.Tool.CrystalCtrl
             // Status - maybe that's the only other?
             _maybeMemoryEventsAPI.AddExecCallback((_, _, _) =>
             {
-                if (enemyCtrlActive && _maybeMemAPI.ReadByte(RomBank, "System Bus") == 0x0E)
+                if (enemyCtrlActive && _maybeMemAPI.ReadByte(RomBank, "System Bus") == 0x0E && 
+                    currentChosenAction?.actionType == MsgsCommon.ActionType.useItem)
                 {
                     Console.WriteLine("using a healing item");
                     _maybeEmuAPI.SetRegister("PC", (int)AI_ItemsUse);
                     currentChosenAction = null;
                 }
-            }, AI_ItemsHealItem, "System Bus");          
-            
+            }, AI_ItemsHealItem, "System Bus");
+
+            _maybeMemoryEventsAPI.AddExecCallback((_, _, _) =>
+            {
+                if (enemyCtrlActive && _maybeMemAPI.ReadByte(RomBank, "System Bus") == 0x0E && 
+                    currentChosenAction?.actionType == MsgsCommon.ActionType.useItem)
+                {
+                    Console.WriteLine("using a status item");
+                    _maybeEmuAPI.SetRegister("PC", (int)AI_ItemsUse);
+                    currentChosenAction = null;
+                }
+            }, AI_ItemsStatus, "System Bus");
+
             //This is where the player enters their battle menu.
             //Pause user input until enemy selects their action
             _maybeMemoryEventsAPI.AddExecCallback((_, _, _) =>
