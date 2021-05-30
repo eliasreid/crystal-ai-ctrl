@@ -35,8 +35,8 @@ namespace BizHawk.Tool.CrystalCtrl
 
         private ApiContainer? _apis;
         private GroupBox grpMoves;
-        private Button btnMove1;
         private Button btnMove0;
+        private Button btnMove1;
         private Button btnMove2;
         private Button btnMove3;
         private GroupBox grpMons;
@@ -49,12 +49,10 @@ namespace BizHawk.Tool.CrystalCtrl
         private Label lblCurrentState;
         private Button btnConnect;
         private Button btnTestSend;
+        private GroupBox grpItems;
+        private Button btnItem1;
+        private Button btnItem0;
 
-        //the null-coalescing assignment operator ??= assigns the value of its right-hand operand to its left-hand operand
-        //only if the left-hand operand evaluates to null. The ??= operator doesn't evaluate its
-        //right-hand operand if the left-hand operand evaluates to non-null.
-
-        //The null-coalescing operator ?? returns the value of its left-hand operand if it isn't null; otherwise, it evaluates the right-hand operand and returns its result
         private ApiContainer APIs => _apis ??= new ApiContainer(new Dictionary<Type, IExternalApi>
         {
             [typeof(ICommApi)] = _maybeCommAPI ?? throw new NullReferenceException(),
@@ -65,35 +63,6 @@ namespace BizHawk.Tool.CrystalCtrl
             [typeof(IMemoryApi)] = _maybeMemAPI ?? throw new NullReferenceException(),
             [typeof(IMemoryEventsApi)] = _maybeMemoryEventsAPI ?? throw new NullReferenceException()
         });
-
-        //Mem domain WRAM
-        //Mem domain ROM
-        //Mem domain VRAM
-        //Mem domain OAM
-        //Mem domain HRAM
-        //Mem domain System Bus
-        //Mem domain CartRAM
-
-//register PCl : 25
-//register PCh : 2
-//register SPl : 248
-//register SPh : 255
-//register A : 62
-//register F : 160
-//register B : 78
-//register C : 62
-//register D : 221
-//register E : 0
-//register H : 255
-//register L : 15
-//register W : 252
-//register Z : 0
-//register PC : 537
-//register Flag I : 0
-//register Flag C : 0
-//register Flag H : 1
-//register Flag N : 0
-//register Flag Z : 1
 
         //Game constants
         const uint BattleMode = 0xD22D;
@@ -120,9 +89,9 @@ namespace BizHawk.Tool.CrystalCtrl
         const UInt16 ExitBattle = 0x769e;
         const UInt16 ParseEnemyAction = 0x67C1;
         const UInt16 BattleMenu = 0x6139;
+        const UInt16 SwitchOrTryItem = 0x4000;
         const UInt16 SwitchOrTryItemOk = 0x4032;
         private CheckBox chkJoypadDisable;
-        //private bool battleModeChanged = false;
 
         const UInt16 RomBank = 0xff9d;
 
@@ -131,33 +100,36 @@ namespace BizHawk.Tool.CrystalCtrl
         //Data for switching logic
         const UInt16 EnemySwitchMonIndex = 0xc718;
         const UInt16 AiTrySwitch = 0x444B;
+        const UInt16 DontSwitch = 0x4041;
         const UInt16 DontSwitchRet = 0x4044;
 
         const UInt16 ReadTrainerPartyDone = 0x57d0;
 
+        const UInt16 EnemyTrainerItem1 = 0xc650;
+        const UInt16 EnemyTrainerItem2 = 0xc651;
+        const UInt16 AI_TryItem = 0x4105;
+        const UInt16 AI_TryItemHasItem = 0x413f;
+        const UInt16 AI_ItemsHealItem = 0x422c;
+        const UInt16 AI_ItemsStatus = 0x41ca;
+        const UInt16 AI_ItemsUse = 0x4385;
+        const UInt16 AI_Items = 0x4196;
+
         //TOOD: inBattle should be "controllingBattle" - thta way we can start with false, even if start in middle of battle, 
         //Will just start working on next battle
         private bool enemyCtrlActive = false;
-        private int? chosenMove = null;
-        private int? chosenMon = null;
+        private ChosenActionMsg? currentChosenAction = null;
         private List<byte> enemyMoves = new List<byte>();
         bool inputDisabled = false;
 
         private void resetBattleState()
         {
             enemyCtrlActive = false;
-            chosenMon = null;
-            chosenMove = null;
+            currentChosenAction = null;
             enemyMoves.Clear();
             inputDisabled = false;
 
-            AvailableActionsMsg msg = new AvailableActionsMsg();
-            setupMonButtons(msg.pokemon);
-            setupMoveButtons(msg.moves);
-            //TODO: item buttons
-            string json = JsonConvert.SerializeObject(msg, Formatting.None);
-            wsClient.SendMessage(json);
-
+            //Send blank available acitons msg
+            updateClientActions(new AvailableActionsMsg());
         }
 
         WsClient wsClient = new WsClient();
@@ -181,6 +153,8 @@ namespace BizHawk.Tool.CrystalCtrl
         /// Restart gets called after the apis are loaded - I think wasn't working before because of emulation not being started
         /// </summary>
         public void Restart() {
+
+            resetBattleState();
 
             wsClient.MessageReceiveCallback( data =>
             {
@@ -211,12 +185,14 @@ namespace BizHawk.Tool.CrystalCtrl
                 Console.WriteLine($"{entry.Key}");
             }
 
+            //reset varts when save state is loaded, otherwise get into weird state.
+            //As a conseqeunce, have to wait until next battle start to regain control
             _maybeClientAPI.StateLoaded += (_, _) =>
             {
                 resetBattleState();
             };
 
-            //set inBattle flag when enemy trainer is inited
+            //set inBattle flag when enemy trainer is initialized
             //TODO: eventually meaning will change - only set inBattle if enemy is being controlled by net / ui, etc
             _maybeMemoryEventsAPI.AddExecCallback((_, _, _) => {
                 enemyCtrlActive = true;
@@ -226,31 +202,7 @@ namespace BizHawk.Tool.CrystalCtrl
             _maybeMemoryEventsAPI.AddExecCallback((_, _, _) => {
                 enemyCtrlActive = false;
                 Console.WriteLine("Exit battle called");
-            }, ExitBattle, "System Bus");            
-
-            _maybeMemoryEventsAPI.AddExecCallback((_, _, _) => {
-
-                if (enemyCtrlActive && _maybeMemAPI.ReadByte(RomBank, "System Bus") == 0x0E)
-                {
-                    if (chosenMon.HasValue)
-                    {
-                        //Try jumping to AI_TrySwitch with wEnemySwitchMonIndexSet
-                        _maybeEmuAPI.SetRegister("PC", AiTrySwitch);
-
-                        //TOOD: make sure works, I think index is actually 1-6
-                        Console.WriteLine($"Switching mon to {chosenMon.Value}");
-                        _maybeMemAPI.WriteByte(EnemySwitchMonIndex, (uint)chosenMon.Value + 1, "System Bus");
-                        chosenMon = null;
-                    }else if (chosenMove.HasValue)
-                    {
-                        //Jump to return statement in DontSwitch - this is to ensure selected move doesn't get overwritten
-                        // AI choice to use item or switch
-                        Console.WriteLine($"Jumping to DontSwitchRet to ensure item / switch not used");
-                        _maybeEmuAPI.SetRegister("PC", DontSwitchRet);
-                        chosenMove = null;
-                    }
-                }
-            }, SwitchOrTryItemOk, "System Bus");
+            }, ExitBattle, "System Bus");
 
             //Executed when new enemy pokmeon is switched in
             _maybeMemoryEventsAPI.AddExecCallback((_, _, _) =>
@@ -259,31 +211,18 @@ namespace BizHawk.Tool.CrystalCtrl
                 {
                     Console.WriteLine("enemy poke loaded");
                     //Read in move IDs from list - remove moves with id of 0 (represent empty move slots)
-                    // Making the assumption that empty move slots are always at the end...
                     enemyMoves = _maybeMemAPI.ReadByteRange(EnemyMonMoves, 4, "System Bus");
-                    for(int i = 0; i < enemyMoves.Count; i++){
-                        if(enemyMoves[i] == 0){
-                            //cut list off here
-                            enemyMoves.RemoveRange(i, enemyMoves.Count - i);
-                            break;
-                        }
-                    }
+                    enemyMoves.RemoveAll(move => move == 0);
 
                     AvailableActionsMsg msg = new AvailableActionsMsg();
                     msg.pokemon = readEnemyParty();
-                    foreach(byte moveId in enemyMoves){
+                    msg.items = readEnemyItems();
+                    foreach (byte moveId in enemyMoves)
+                    {
                         msg.moves.Add(DataHelpers.moveName(moveId));
                     }
-
-                    //TODO: read available pokemon to switch to.
-                    // Should be trivial to read from WRAM party data
-                    setupMoveButtons(msg.moves);
-                    //setupMonButtons(msg.pokemon)
-                    string json = JsonConvert.SerializeObject(msg, Formatting.None);
-                    wsClient.SendMessage(json);
-                    Console.WriteLine("sending: " + json);
+                    updateClientActions(msg);
                 }
-                
             }, LoadEnemyMonRet, "System Bus");
 
             //This is where enemy attack is re-written, if enemy selects an attack
@@ -293,13 +232,11 @@ namespace BizHawk.Tool.CrystalCtrl
                 if (enemyCtrlActive)
                 {
                     Console.WriteLine("Parsing enemy action");
-                    if (chosenMove.HasValue)
+                    if (currentChosenAction?.actionType == MsgsCommon.ActionType.useMove)
                     {
-                        //TODO: So I also have to force enemy AI NOT to use item or swi
                         Console.WriteLine("Overwriting enemy move with chosen move");
-                        _maybeMemAPI.WriteByte(EnemyCurrentMove, enemyMoves[chosenMove.Value], "System Bus");
-                        _maybeMemAPI.WriteByte(EnemyCurrentMoveNum, (uint)chosenMove.Value, "System Bus");
-                        chosenMove = null;
+                        _maybeMemAPI.WriteByte(EnemyCurrentMove, enemyMoves[currentChosenAction.actionIndex], "System Bus");
+                        _maybeMemAPI.WriteByte(EnemyCurrentMoveNum, (uint)currentChosenAction.actionIndex, "System Bus");
                     }
                     else
                     {
@@ -309,19 +246,139 @@ namespace BizHawk.Tool.CrystalCtrl
 
             }, ParseEnemyAction, "System Bus");
 
+            //If opponent has chosen to use a move, exit immediately from AI_SwitchOrTryItem
+            //function, so that the move decision doesn't get overriden with a item or switch
+            _maybeMemoryEventsAPI.AddExecCallback((_, _, _) => {
+
+                if (enemyCtrlActive && _maybeMemAPI.ReadByte(RomBank, "System Bus") == 0x0E)
+                {
+                    if (currentChosenAction?.actionType == MsgsCommon.ActionType.useMove)
+                    {
+                        forceReturn();
+                        currentChosenAction = null;
+                    }
+                }
+            }, SwitchOrTryItem, "System Bus");
+
+            _maybeMemoryEventsAPI.AddExecCallback((_, _, _) => {
+
+                if (enemyCtrlActive && _maybeMemAPI.ReadByte(RomBank, "System Bus") == 0x0E)
+                {
+                    //currentChosenAction is null when I am choosing a move.
+                    //Shouldn't this be set?
+                    switch (currentChosenAction?.actionType)
+                    {
+                        case MsgsCommon.ActionType.pokemonSwitch:
+                            //Execute switch by jumping to AI_TrySwitch and setting wEnemySwitchMonIndex to chosen value
+                            _maybeEmuAPI.SetRegister("PC", AiTrySwitch);
+                            Console.WriteLine($"Switching mon to index: {currentChosenAction.actionIndex}");
+                            _maybeMemAPI.WriteByte(EnemySwitchMonIndex, (uint)currentChosenAction.actionIndex + 1, "System Bus");
+                            currentChosenAction = null;
+                            break;
+                        case MsgsCommon.ActionType.useMove:
+                            //Jump to return statement in DontSwitch - this is to ensure selected move doesn't get
+                            // overwritten with AI choice to use item or switch
+                            Console.WriteLine($"Jumping to DontSwitchRet to ensure item / switch not used");
+                            _maybeEmuAPI.SetRegister("PC", DontSwitchRet);
+                            break;
+                        case MsgsCommon.ActionType.useItem:
+                            // Jump to don't switch, which calls AI_TryItem
+                            // In AI_TryItem, handle selecting item
+                            _maybeEmuAPI.SetRegister("PC", DontSwitch);
+                            Console.WriteLine("using item, jump to don't switch");
+                            break;
+                        case null:
+                            //allow emulation to proceed as normal
+                            break;
+
+                    }
+                }
+            }, SwitchOrTryItemOk, "System Bus");
+
+            _maybeMemoryEventsAPI.AddExecCallback((_, _, _) => {
+                if (enemyCtrlActive && _maybeMemAPI.ReadByte(RomBank, "System Bus") == 0x0E)
+                {
+                    _maybeEmuAPI.SetRegister("PC", AI_TryItemHasItem);
+                    //AI_Items:
+                    //    dbw FULL_RESTORE, .FullRestore
+                    //    dbw MAX_POTION,   .MaxPotion
+                    //    dbw HYPER_POTION, .HyperPotion
+                    //    dbw SUPER_POTION, .SuperPotion
+                    //    dbw POTION,       .Potion
+                    //    dbw X_ACCURACY,   .XAccuracy
+                    //    dbw FULL_HEAL,    .FullHeal
+                    //    dbw GUARD_SPEC,   .GuardSpec
+                    //    dbw DIRE_HIT,     .DireHit
+                    //    dbw X_ATTACK,     .XAttack
+                    //    dbw X_DEFEND,     .XDefend
+                    //    dbw X_SPEED,      .XSpeed
+                    //    dbw X_SPECIAL,    .XSpecial
+
+                    //item ADDRESS to use
+                    var itemAddress = currentChosenAction.actionIndex == 0 ? EnemyTrainerItem1 : EnemyTrainerItem2;
+                    var itemId = _maybeMemAPI.ReadByte(itemAddress, "System Bus");
+
+                    var itemsTable = _maybeMemAPI.ReadByteRange(AI_Items, 13 * 3, "System Bus");
+                    UInt16 rowAddress = 0;
+
+                    for (int i = 0; i < 13; i++)
+                    {
+                        if (itemsTable[i * 3] == itemId) { 
+                            rowAddress = (UInt16)(AI_Items + (UInt16)i *3);
+                            break;
+                        }
+                    }
+
+                    if(rowAddress == 0)
+                    {
+                        Console.WriteLine("something went terribly wrong");
+                        throw new Exception("Failed to modify emulator stuff to force item use, crashing");
+                    }
+
+                    //This should force to "attempt" to use the item, even if ultimately doesnt use
+                    //due to pokemon status, trianer tendencies, etc.
+                    set16BitRegister(itemAddress, "D", "E");
+                    set16BitRegister(rowAddress, "H", "L");
+                    Console.WriteLine("addresses set, should be forcing ot attempt to use item");
+                }
+            }, AI_TryItem, "System Bus");
+
+            //TODO: other callbacks to handle different items types (to elim randomness)
+            // Status - maybe that's the only other?
+            _maybeMemoryEventsAPI.AddExecCallback((_, _, _) =>
+            {
+                if (enemyCtrlActive && _maybeMemAPI.ReadByte(RomBank, "System Bus") == 0x0E && 
+                    currentChosenAction?.actionType == MsgsCommon.ActionType.useItem)
+                {
+                    Console.WriteLine("using a healing item");
+                    _maybeEmuAPI.SetRegister("PC", (int)AI_ItemsUse);
+                    currentChosenAction = null;
+                }
+            }, AI_ItemsHealItem, "System Bus");
+
+            _maybeMemoryEventsAPI.AddExecCallback((_, _, _) =>
+            {
+                if (enemyCtrlActive && _maybeMemAPI.ReadByte(RomBank, "System Bus") == 0x0E && 
+                    currentChosenAction?.actionType == MsgsCommon.ActionType.useItem)
+                {
+                    Console.WriteLine("using a status item");
+                    _maybeEmuAPI.SetRegister("PC", (int)AI_ItemsUse);
+                    currentChosenAction = null;
+                }
+            }, AI_ItemsStatus, "System Bus");
+
             //This is where the player enters their battle menu.
             //Pause user input until enemy selects their action
             _maybeMemoryEventsAPI.AddExecCallback((_, _, _) =>
             {
-                //If Enemy has not yet chosen a move
-                //TODO: OR SWITCH / ITEM. ETC - ACTION
-                if (enemyCtrlActive && !chosenMove.HasValue && !chosenMon.HasValue)
+                if (enemyCtrlActive && currentChosenAction == null)
                 {
                     Console.WriteLine("Disabling input, waiting for opponent to select action");
                     InputDisable(true);
                 }
                 //TODO: ideally we only disable input AFTER user has selected an action
                 //That is, intercept their action, cancel it, they run it after enemy has selected a move
+                //Current limitation means that enemy has to choose move first
             }, BattleMenu, "System Bus");
 
             //Executed when enemey pokemon is loading from party
@@ -332,11 +389,11 @@ namespace BizHawk.Tool.CrystalCtrl
             {
                 if(enemyCtrlActive && _maybeMemAPI.ReadByte(RomBank, "System Bus") == 0x0F)
                 {
-                    if (chosenMon.HasValue)
+                    if(currentChosenAction?.actionType == MsgsCommon.ActionType.pokemonSwitch)
                     {
-                        Console.WriteLine($"in LoadEnemyMonToSwitchTo callback, setting mon index to {chosenMon}");
-                        _maybeEmuAPI.SetRegister("B", chosenMon.Value);
-                        chosenMon = null;
+                        Console.WriteLine($"in LoadEnemyMonToSwitchTo callback, setting mon index to {currentChosenAction.actionIndex}");
+                        _maybeEmuAPI.SetRegister("B", currentChosenAction.actionIndex);
+                        currentChosenAction = null;
                     }
                     else
                     {
@@ -353,16 +410,10 @@ namespace BizHawk.Tool.CrystalCtrl
                 //TODO: check for variable "enemyNextMon" (different from switchMon)
                 if (enemyCtrlActive && _maybeMemAPI.ReadByte(RomBank, "System Bus") == 0x0E)
                 {
-                    var partyInfo = readEnemyParty();
-
-                    //update GUI and send info to browser
-                    setupMonButtons(partyInfo);
                     //only pokemon selection is available (no moves or items)
                     AvailableActionsMsg availActions = new AvailableActionsMsg();
-                    availActions.pokemon = partyInfo;
-                    string json = JsonConvert.SerializeObject(availActions, Formatting.None);
-                    wsClient.SendMessage(json);
-                    Console.WriteLine("sending: " + json);
+                    availActions.pokemon = readEnemyParty();
+                    updateClientActions(availActions);
 
                 }
             }, ReadTrainerPartyDone, "System Bus");
@@ -378,7 +429,7 @@ namespace BizHawk.Tool.CrystalCtrl
                     return;
                 }
                 var partyCount = _maybeMemAPI.ReadByte(OTPartyCount, "System Bus");
-                if (enemyCtrlActive && partyCount > 1 && !chosenMon.HasValue)
+                if (enemyCtrlActive && partyCount > 1 && currentChosenAction == null)
                 {
                     //Waiting for enemy to choose pokemon, disable input until we receive which
                     //mon should be used
@@ -390,12 +441,9 @@ namespace BizHawk.Tool.CrystalCtrl
 
         
         private List<MsgsCommon.MonInfo> readEnemyParty(){
-            //Read enemy party pokemon names - already doing this in another piece of code (above)
-
             var partyCount = _maybeMemAPI.ReadByte(OTPartyCount, "System Bus");
 
             //TODO: maybe better to single byte range, rather than multiple API calls?
-            var availActions = new AvailableActionsMsg();
             var partyInfo = new List<MsgsCommon.MonInfo>();
             for (uint i = 0; i < partyCount; i++)
             {
@@ -413,7 +461,13 @@ namespace BizHawk.Tool.CrystalCtrl
             return partyInfo;
         }
 
-        //
+        private List<string> readEnemyItems()
+        {
+            var itemIds = _maybeMemAPI.ReadByteRange(EnemyTrainerItem1, 2, "System Bus");
+            itemIds.RemoveAll(id => id == 0);
+            return itemIds.ConvertAll<string>(id => DataHelpers.itemName(id));
+        }
+
         private static MsgsCommon.Status readStatusFlags(byte statusFlags){
             // Looks like psn burn, frz, par are single bits, but sleep is 3 bits 
             //TODO: I think looks like this - need to confirm.
@@ -453,13 +507,8 @@ namespace BizHawk.Tool.CrystalCtrl
 
         private void setupMoveButtons(List<string> moveIds)
         {
-            //TODO: translate move hex codes into strings (before enter this functino )
-            //TODO: put buttons in a list to simply function
             Console.WriteLine("Setting up move buttons");
 
-            //Check if connected to websocket, send JSON to server.
-
-            chosenMove = null;
             foreach (Control ctrl in grpMoves.Controls)
             {
                 ctrl.Text = "";
@@ -494,7 +543,6 @@ namespace BizHawk.Tool.CrystalCtrl
             btnMove3.Enabled = true;
         }
 
-        //takes in list of pokemon IDs for enemy party.
         private void setupMonButtons(List<MsgsCommon.MonInfo> monIDs)
         {
             Console.WriteLine("setting up enemy mon buttons");
@@ -545,6 +593,30 @@ namespace BizHawk.Tool.CrystalCtrl
             btnMon5.Enabled = true;
         }
 
+        private void setupItemButtons(List<string> items)
+        {
+            foreach (Control ctrl in grpItems.Controls)
+            {
+                ctrl.Enabled = false;
+                ctrl.Text = "";
+            }
+            if (items.Count < 1)
+            {
+                return;
+            }
+
+            btnItem0.Text = $"{items[0]}";
+            btnItem0.Enabled = true;
+
+            if (items.Count < 2)
+            {
+                return;
+            }
+
+            btnItem1.Text = $"{items[1]}";
+            btnItem1.Enabled = true;
+        }
+
 		public bool AskSaveChanges() => true;
 
 		public void UpdateValues(ToolFormUpdateType type)
@@ -559,27 +631,6 @@ namespace BizHawk.Tool.CrystalCtrl
                     
                     break;
                 case ToolFormUpdateType.PostFrame:
-                    //if (battleModeChanged)
-                    //{
-                    //    //check mem address
-                    //    var currMode = _maybeMemAPI.ReadByte(BattleMode);
-                    //    switch (currMode)
-                    //    {
-                    //        case 0x00:
-                    //            Console.WriteLine("BattleMode: Overworld");
-                    //            break;
-                    //        case 0x01:
-                    //            Console.WriteLine("BattleMode: Wild Mon");
-                    //            break;
-                    //        case 0x02:
-                    //            Console.WriteLine("Battlemode: Trainer ----");
-                    //            break;
-                    //        default:
-                    //            Console.WriteLine($"Battlemode: unknown ({currMode})");
-                    //            break;
-                    //    }
-                    //    battleModeChanged = false;
-                    //}
                     break;
                 default:
                     break;
@@ -598,11 +649,6 @@ namespace BizHawk.Tool.CrystalCtrl
 
         private void InitializeComponent()
         {
-            this.grpMoves = new System.Windows.Forms.GroupBox();
-            this.btnMove3 = new System.Windows.Forms.Button();
-            this.btnMove2 = new System.Windows.Forms.Button();
-            this.btnMove1 = new System.Windows.Forms.Button();
-            this.btnMove0 = new System.Windows.Forms.Button();
             this.grpMons = new System.Windows.Forms.GroupBox();
             this.btnMon5 = new System.Windows.Forms.Button();
             this.btnMon4 = new System.Windows.Forms.Button();
@@ -614,66 +660,18 @@ namespace BizHawk.Tool.CrystalCtrl
             this.chkJoypadDisable = new System.Windows.Forms.CheckBox();
             this.btnConnect = new System.Windows.Forms.Button();
             this.btnTestSend = new System.Windows.Forms.Button();
-            this.grpMoves.SuspendLayout();
+            this.btnMove0 = new System.Windows.Forms.Button();
+            this.btnMove1 = new System.Windows.Forms.Button();
+            this.btnMove2 = new System.Windows.Forms.Button();
+            this.btnMove3 = new System.Windows.Forms.Button();
+            this.grpMoves = new System.Windows.Forms.GroupBox();
+            this.grpItems = new System.Windows.Forms.GroupBox();
+            this.btnItem1 = new System.Windows.Forms.Button();
+            this.btnItem0 = new System.Windows.Forms.Button();
             this.grpMons.SuspendLayout();
+            this.grpMoves.SuspendLayout();
+            this.grpItems.SuspendLayout();
             this.SuspendLayout();
-            // 
-            // grpMoves
-            // 
-            this.grpMoves.Controls.Add(this.btnMove3);
-            this.grpMoves.Controls.Add(this.btnMove2);
-            this.grpMoves.Controls.Add(this.btnMove1);
-            this.grpMoves.Controls.Add(this.btnMove0);
-            this.grpMoves.Location = new System.Drawing.Point(12, 12);
-            this.grpMoves.Name = "grpMoves";
-            this.grpMoves.Size = new System.Drawing.Size(169, 81);
-            this.grpMoves.TabIndex = 0;
-            this.grpMoves.TabStop = false;
-            this.grpMoves.Text = "Moves";
-            // 
-            // btnMove3
-            // 
-            this.btnMove3.Enabled = false;
-            this.btnMove3.Location = new System.Drawing.Point(87, 48);
-            this.btnMove3.Name = "btnMove3";
-            this.btnMove3.Size = new System.Drawing.Size(75, 23);
-            this.btnMove3.TabIndex = 0;
-            this.btnMove3.Text = "Move 3";
-            this.btnMove3.UseVisualStyleBackColor = true;
-            this.btnMove3.Click += new System.EventHandler(this.btnMove3_Click);
-            // 
-            // btnMove2
-            // 
-            this.btnMove2.Enabled = false;
-            this.btnMove2.Location = new System.Drawing.Point(6, 48);
-            this.btnMove2.Name = "btnMove2";
-            this.btnMove2.Size = new System.Drawing.Size(75, 23);
-            this.btnMove2.TabIndex = 0;
-            this.btnMove2.Text = "Move 2";
-            this.btnMove2.UseVisualStyleBackColor = true;
-            this.btnMove2.Click += new System.EventHandler(this.btnMove2_Click);
-            // 
-            // btnMove1
-            // 
-            this.btnMove1.Enabled = false;
-            this.btnMove1.Location = new System.Drawing.Point(87, 19);
-            this.btnMove1.Name = "btnMove1";
-            this.btnMove1.Size = new System.Drawing.Size(75, 23);
-            this.btnMove1.TabIndex = 0;
-            this.btnMove1.Text = "Move 1";
-            this.btnMove1.UseVisualStyleBackColor = true;
-            this.btnMove1.Click += new System.EventHandler(this.btnMove1_Click);
-            // 
-            // btnMove0
-            // 
-            this.btnMove0.Enabled = false;
-            this.btnMove0.Location = new System.Drawing.Point(6, 19);
-            this.btnMove0.Name = "btnMove0";
-            this.btnMove0.Size = new System.Drawing.Size(75, 23);
-            this.btnMove0.TabIndex = 0;
-            this.btnMove0.Text = "Move 0";
-            this.btnMove0.UseVisualStyleBackColor = true;
-            this.btnMove0.Click += new System.EventHandler(this.btnMove0_Click);
             // 
             // grpMons
             // 
@@ -685,16 +683,16 @@ namespace BizHawk.Tool.CrystalCtrl
             this.grpMons.Controls.Add(this.btnMon0);
             this.grpMons.Location = new System.Drawing.Point(12, 99);
             this.grpMons.Name = "grpMons";
-            this.grpMons.Size = new System.Drawing.Size(169, 115);
+            this.grpMons.Size = new System.Drawing.Size(242, 115);
             this.grpMons.TabIndex = 1;
             this.grpMons.TabStop = false;
             this.grpMons.Text = "Pokemon";
             // 
             // btnMon5
             // 
-            this.btnMon5.Location = new System.Drawing.Point(87, 77);
+            this.btnMon5.Location = new System.Drawing.Point(121, 77);
             this.btnMon5.Name = "btnMon5";
-            this.btnMon5.Size = new System.Drawing.Size(75, 23);
+            this.btnMon5.Size = new System.Drawing.Size(115, 23);
             this.btnMon5.TabIndex = 0;
             this.btnMon5.Text = "Mon 5";
             this.btnMon5.UseVisualStyleBackColor = true;
@@ -704,7 +702,7 @@ namespace BizHawk.Tool.CrystalCtrl
             // 
             this.btnMon4.Location = new System.Drawing.Point(6, 77);
             this.btnMon4.Name = "btnMon4";
-            this.btnMon4.Size = new System.Drawing.Size(75, 23);
+            this.btnMon4.Size = new System.Drawing.Size(109, 23);
             this.btnMon4.TabIndex = 0;
             this.btnMon4.Text = "Mon 4";
             this.btnMon4.UseVisualStyleBackColor = true;
@@ -712,9 +710,9 @@ namespace BizHawk.Tool.CrystalCtrl
             // 
             // btnMon3
             // 
-            this.btnMon3.Location = new System.Drawing.Point(87, 48);
+            this.btnMon3.Location = new System.Drawing.Point(121, 48);
             this.btnMon3.Name = "btnMon3";
-            this.btnMon3.Size = new System.Drawing.Size(75, 23);
+            this.btnMon3.Size = new System.Drawing.Size(115, 23);
             this.btnMon3.TabIndex = 0;
             this.btnMon3.Text = "Mon 3";
             this.btnMon3.UseVisualStyleBackColor = true;
@@ -724,7 +722,7 @@ namespace BizHawk.Tool.CrystalCtrl
             // 
             this.btnMon2.Location = new System.Drawing.Point(6, 48);
             this.btnMon2.Name = "btnMon2";
-            this.btnMon2.Size = new System.Drawing.Size(75, 23);
+            this.btnMon2.Size = new System.Drawing.Size(109, 23);
             this.btnMon2.TabIndex = 0;
             this.btnMon2.Text = "Mon 2";
             this.btnMon2.UseVisualStyleBackColor = true;
@@ -732,9 +730,9 @@ namespace BizHawk.Tool.CrystalCtrl
             // 
             // btnMon1
             // 
-            this.btnMon1.Location = new System.Drawing.Point(87, 19);
+            this.btnMon1.Location = new System.Drawing.Point(121, 19);
             this.btnMon1.Name = "btnMon1";
-            this.btnMon1.Size = new System.Drawing.Size(75, 23);
+            this.btnMon1.Size = new System.Drawing.Size(115, 23);
             this.btnMon1.TabIndex = 0;
             this.btnMon1.Text = "Mon 1";
             this.btnMon1.UseVisualStyleBackColor = true;
@@ -744,7 +742,7 @@ namespace BizHawk.Tool.CrystalCtrl
             // 
             this.btnMon0.Location = new System.Drawing.Point(6, 19);
             this.btnMon0.Name = "btnMon0";
-            this.btnMon0.Size = new System.Drawing.Size(75, 23);
+            this.btnMon0.Size = new System.Drawing.Size(109, 23);
             this.btnMon0.TabIndex = 0;
             this.btnMon0.Text = "Mon 0";
             this.btnMon0.UseVisualStyleBackColor = true;
@@ -753,7 +751,7 @@ namespace BizHawk.Tool.CrystalCtrl
             // lblCurrentState
             // 
             this.lblCurrentState.AutoSize = true;
-            this.lblCurrentState.Location = new System.Drawing.Point(18, 221);
+            this.lblCurrentState.Location = new System.Drawing.Point(15, 304);
             this.lblCurrentState.Name = "lblCurrentState";
             this.lblCurrentState.Size = new System.Drawing.Size(85, 13);
             this.lblCurrentState.TabIndex = 2;
@@ -762,7 +760,7 @@ namespace BizHawk.Tool.CrystalCtrl
             // chkJoypadDisable
             // 
             this.chkJoypadDisable.AutoSize = true;
-            this.chkJoypadDisable.Location = new System.Drawing.Point(30, 256);
+            this.chkJoypadDisable.Location = new System.Drawing.Point(27, 339);
             this.chkJoypadDisable.Name = "chkJoypadDisable";
             this.chkJoypadDisable.Size = new System.Drawing.Size(131, 17);
             this.chkJoypadDisable.TabIndex = 3;
@@ -772,7 +770,7 @@ namespace BizHawk.Tool.CrystalCtrl
             // 
             // btnConnect
             // 
-            this.btnConnect.Location = new System.Drawing.Point(18, 296);
+            this.btnConnect.Location = new System.Drawing.Point(15, 379);
             this.btnConnect.Name = "btnConnect";
             this.btnConnect.Size = new System.Drawing.Size(75, 23);
             this.btnConnect.TabIndex = 4;
@@ -782,7 +780,7 @@ namespace BizHawk.Tool.CrystalCtrl
             // 
             // btnTestSend
             // 
-            this.btnTestSend.Location = new System.Drawing.Point(106, 296);
+            this.btnTestSend.Location = new System.Drawing.Point(103, 379);
             this.btnTestSend.Name = "btnTestSend";
             this.btnTestSend.Size = new System.Drawing.Size(75, 23);
             this.btnTestSend.TabIndex = 4;
@@ -790,9 +788,100 @@ namespace BizHawk.Tool.CrystalCtrl
             this.btnTestSend.UseVisualStyleBackColor = true;
             this.btnTestSend.Click += new System.EventHandler(this.btnTestSend_Click);
             // 
+            // btnMove0
+            // 
+            this.btnMove0.Enabled = false;
+            this.btnMove0.Location = new System.Drawing.Point(6, 19);
+            this.btnMove0.Name = "btnMove0";
+            this.btnMove0.Size = new System.Drawing.Size(109, 23);
+            this.btnMove0.TabIndex = 0;
+            this.btnMove0.Text = "Move 0";
+            this.btnMove0.UseVisualStyleBackColor = true;
+            this.btnMove0.Click += new System.EventHandler(this.btnMove0_Click);
+            // 
+            // btnMove1
+            // 
+            this.btnMove1.Enabled = false;
+            this.btnMove1.Location = new System.Drawing.Point(121, 19);
+            this.btnMove1.Name = "btnMove1";
+            this.btnMove1.Size = new System.Drawing.Size(115, 23);
+            this.btnMove1.TabIndex = 0;
+            this.btnMove1.Text = "Move 1";
+            this.btnMove1.UseVisualStyleBackColor = true;
+            this.btnMove1.Click += new System.EventHandler(this.btnMove1_Click);
+            // 
+            // btnMove2
+            // 
+            this.btnMove2.Enabled = false;
+            this.btnMove2.Location = new System.Drawing.Point(6, 48);
+            this.btnMove2.Name = "btnMove2";
+            this.btnMove2.Size = new System.Drawing.Size(109, 23);
+            this.btnMove2.TabIndex = 0;
+            this.btnMove2.Text = "Move 2";
+            this.btnMove2.UseVisualStyleBackColor = true;
+            this.btnMove2.Click += new System.EventHandler(this.btnMove2_Click);
+            // 
+            // btnMove3
+            // 
+            this.btnMove3.Enabled = false;
+            this.btnMove3.Location = new System.Drawing.Point(121, 48);
+            this.btnMove3.Name = "btnMove3";
+            this.btnMove3.Size = new System.Drawing.Size(115, 23);
+            this.btnMove3.TabIndex = 0;
+            this.btnMove3.Text = "Move 3";
+            this.btnMove3.UseVisualStyleBackColor = true;
+            this.btnMove3.Click += new System.EventHandler(this.btnMove3_Click);
+            // 
+            // grpMoves
+            // 
+            this.grpMoves.Controls.Add(this.btnMove3);
+            this.grpMoves.Controls.Add(this.btnMove2);
+            this.grpMoves.Controls.Add(this.btnMove1);
+            this.grpMoves.Controls.Add(this.btnMove0);
+            this.grpMoves.Location = new System.Drawing.Point(12, 12);
+            this.grpMoves.Name = "grpMoves";
+            this.grpMoves.Size = new System.Drawing.Size(242, 81);
+            this.grpMoves.TabIndex = 0;
+            this.grpMoves.TabStop = false;
+            this.grpMoves.Text = "Moves";
+            // 
+            // grpItems
+            // 
+            this.grpItems.Controls.Add(this.btnItem1);
+            this.grpItems.Controls.Add(this.btnItem0);
+            this.grpItems.Location = new System.Drawing.Point(9, 220);
+            this.grpItems.Name = "grpItems";
+            this.grpItems.Size = new System.Drawing.Size(245, 54);
+            this.grpItems.TabIndex = 5;
+            this.grpItems.TabStop = false;
+            this.grpItems.Text = "Items";
+            // 
+            // btnItem1
+            // 
+            this.btnItem1.Enabled = false;
+            this.btnItem1.Location = new System.Drawing.Point(124, 19);
+            this.btnItem1.Name = "btnItem1";
+            this.btnItem1.Size = new System.Drawing.Size(115, 23);
+            this.btnItem1.TabIndex = 0;
+            this.btnItem1.Text = "Item 1";
+            this.btnItem1.UseVisualStyleBackColor = true;
+            this.btnItem1.Click += new System.EventHandler(this.btnItem1_Click);
+            // 
+            // btnItem0
+            // 
+            this.btnItem0.Enabled = false;
+            this.btnItem0.Location = new System.Drawing.Point(6, 19);
+            this.btnItem0.Name = "btnItem0";
+            this.btnItem0.Size = new System.Drawing.Size(112, 23);
+            this.btnItem0.TabIndex = 0;
+            this.btnItem0.Text = "Item 0";
+            this.btnItem0.UseVisualStyleBackColor = true;
+            this.btnItem0.Click += new System.EventHandler(this.btnItem0_Click);
+            // 
             // CrystalAiForm
             // 
-            this.ClientSize = new System.Drawing.Size(241, 349);
+            this.ClientSize = new System.Drawing.Size(268, 460);
+            this.Controls.Add(this.grpItems);
             this.Controls.Add(this.btnTestSend);
             this.Controls.Add(this.btnConnect);
             this.Controls.Add(this.chkJoypadDisable);
@@ -800,46 +889,42 @@ namespace BizHawk.Tool.CrystalCtrl
             this.Controls.Add(this.grpMons);
             this.Controls.Add(this.grpMoves);
             this.Name = "CrystalAiForm";
-            this.grpMoves.ResumeLayout(false);
             this.grpMons.ResumeLayout(false);
+            this.grpMoves.ResumeLayout(false);
+            this.grpItems.ResumeLayout(false);
             this.ResumeLayout(false);
             this.PerformLayout();
 
         }
 
-        //TODO: btnMonN_Clicks should be used for two things:
-        // - choosing next pokemon, after a faint or start of match
-        // - chooisng next action (e.g. choosing to switch instead of using a move.
-
-        //I think can handle both with a chosenMon variable
         private void btnMon0_Click(object sender, EventArgs e)
         {
-            ChooseMon(0);
+            handleChosenAction(new ChosenActionMsg(MsgsCommon.ActionType.pokemonSwitch, 0));
         }
 
         private void btnMon1_Click(object sender, EventArgs e)
         {
-            ChooseMon(1);
+            handleChosenAction(new ChosenActionMsg(MsgsCommon.ActionType.pokemonSwitch, 1));
         }
 
         private void btnMon2_Click(object sender, EventArgs e)
         {
-            ChooseMon(2);
+            handleChosenAction(new ChosenActionMsg(MsgsCommon.ActionType.pokemonSwitch, 2));
         }
 
         private void btnMon3_Click(object sender, EventArgs e)
         {
-            ChooseMon(3);
+            handleChosenAction(new ChosenActionMsg(MsgsCommon.ActionType.pokemonSwitch, 3));
         }
 
         private void btnMon4_Click(object sender, EventArgs e)  
         {
-            ChooseMon(4);
+            handleChosenAction(new ChosenActionMsg(MsgsCommon.ActionType.pokemonSwitch, 4));
         }
 
         private void btnMon5_Click(object sender, EventArgs e)
         {
-            ChooseMon(5);
+            handleChosenAction(new ChosenActionMsg(MsgsCommon.ActionType.pokemonSwitch, 5));
         }
 
         private void checkBox1_CheckedChanged(object sender, EventArgs e)
@@ -848,43 +933,40 @@ namespace BizHawk.Tool.CrystalCtrl
             InputDisable(false);
         }
 
-        private void ChooseMon(int index)
-        {
-            chosenMon = index;
-            InputDisable(false);
-        }
-
-        private void ChooseMove(int index)
-        {
-            chosenMove = index;
-            InputDisable(false);
-        }
-
         private void btnMove0_Click(object sender, EventArgs e)
         {
-            ChooseMove(0);
+            handleChosenAction(new ChosenActionMsg(MsgsCommon.ActionType.useMove, 0));
         }
 
         private void btnMove1_Click(object sender, EventArgs e)
         {
-            ChooseMove(1);
+            handleChosenAction(new ChosenActionMsg(MsgsCommon.ActionType.useMove, 1));
         }
 
         private void btnMove2_Click(object sender, EventArgs e)
         {
-            ChooseMove(2);
+            handleChosenAction(new ChosenActionMsg(MsgsCommon.ActionType.useMove, 2));
         }
 
         private void btnMove3_Click(object sender, EventArgs e)
         {
-            ChooseMove(3);
+            handleChosenAction(new ChosenActionMsg(MsgsCommon.ActionType.useMove, 3));
+        }
+        private void btnItem0_Click(object sender, EventArgs e)
+        {
+            handleChosenAction(new ChosenActionMsg(MsgsCommon.ActionType.useItem, 0));
+        }
+
+        private void btnItem1_Click(object sender, EventArgs e)
+        {
+            handleChosenAction(new ChosenActionMsg(MsgsCommon.ActionType.useItem, 1));
         }
 
         private void btnConnect_Click(object sender, EventArgs e)
         {
             Console.WriteLine("connecting to ws");
 
-            //TODO: make configurable
+            //TODO: make url configurable
             var connectTask = wsClient.Connect(new Uri("ws://localhost:8999/?type=emulator"));
             connectTask.ContinueWith((task) =>
             {
@@ -927,22 +1009,60 @@ namespace BizHawk.Tool.CrystalCtrl
             Console.WriteLine("sending: " + json);
         }
 
-        //For handling moves chosen from browser client.
-        //TODO: maybe re-use this same function from lcoal UI buttons?
+        //For handling moves chosen from browser client or ui buttons
         private void handleChosenAction(ChosenActionMsg chosenAction){
-            //Console.WriteLine($"Handling chosen action: {chosenAction.actionType} {chosenAction.actionIndex}");
-            switch(chosenAction.actionType){
-                case MsgsCommon.ActionType.useMove:
-                    ChooseMove(chosenAction.actionIndex);
-                    break;
-                case MsgsCommon.ActionType.pokemonSwitch:
-                    ChooseMon(chosenAction.actionIndex);
-                    break;
-                case MsgsCommon.ActionType.useItem:
-                    //TODO: handle item
-                    break;
-            }
+            currentChosenAction = chosenAction;
+            InputDisable(false);
         }
+
+        private void updateClientActions(AvailableActionsMsg availableActions)
+        {
+            currentChosenAction = null;
+
+            //update plugin UI
+            setupItemButtons(availableActions.items);
+            setupMonButtons(availableActions.pokemon);
+            setupMoveButtons(availableActions.moves);
+
+            //Send message to browser to updatae web client
+            string json = JsonConvert.SerializeObject(availableActions, Formatting.None);
+            wsClient.SendMessage(json);
+        }
+
+        private void set16BitRegister(UInt16 value, string msbRegister, string lsbRegister)
+        {
+            var bytes = BitConverter.GetBytes(value);
+
+            //flip to make sure first byte is higher byte
+            if (BitConverter.IsLittleEndian)
+            {
+                bytes = new byte [] {bytes[1], bytes[0] };
+            }
+
+            _maybeEmuAPI.SetRegister(msbRegister, bytes[0]);
+            _maybeEmuAPI.SetRegister(lsbRegister, bytes[1]);
+        }
+
+        private void forceReturn()
+        {
+            //TODO: can simplify this maybe?
+            UInt16 currentPC = (UInt16)_maybeEmuAPI.GetRegister("PC");
+            byte currentSPl = (byte)_maybeEmuAPI.GetRegister("SPl");
+            byte currentSPh = (byte)_maybeEmuAPI.GetRegister("SPh");
+
+            UInt16 currentSP = BitConverter.IsLittleEndian ? 
+                BitConverter.ToUInt16(new byte[] {currentSPl, currentSPh}, 0) :
+                BitConverter.ToUInt16(new byte[] { currentSPh, currentSPl }, 0);
+
+            //read memory at current SP, set PC to stored address (account for GB endianess)
+            List<byte> retAddress = _maybeMemAPI.ReadByteRange(currentSP, 2, "System Bus");
+            //Flipped because GB stores address in little endian
+            _maybeEmuAPI.SetRegister("PCh", (int)retAddress[1]);
+            _maybeEmuAPI.SetRegister("PCl", (int)retAddress[0]);
+            UInt16 newSP = (UInt16)(currentSP + 2);
+            set16BitRegister(newSP, "SPh", "SPl");
+        }
+
     }
 
 }
