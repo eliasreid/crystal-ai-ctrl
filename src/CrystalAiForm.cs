@@ -1,20 +1,21 @@
-using System;
-using System.Collections.Generic;
-using System.Windows.Forms;
-using Newtonsoft.Json;
-
 using BizHawk.Client.Common;
+using BizHawk.Emulation.Common;
 using BizHawk.WinForms.Controls;
 using CrystalAiCtrl;
-using System.Text;
+using Newtonsoft.Json;
+using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using System.Text;
+using System.Windows.Forms;
 
 namespace BizHawk.Tool.CrystalCtrl
 
 {
-    
     [ExternalTool("CrystalAiCtrl")]
-    [ExternalToolApplicability.SingleSystem(CoreSystem.GameBoy)]
+    [ExternalToolApplicability.RomList(VSystemID.Raw.GB,
+                                        "F4CD194BDEE0D04CA4EAC29E09B8E4E9D818C133")]
     public sealed class CrystalAiForm : Form, IExternalToolForm
     {
 
@@ -26,8 +27,6 @@ namespace BizHawk.Tool.CrystalCtrl
         public IEmuClientApi? _maybeClientAPI { get; set; }
         [RequiredApi]
         public IEmulationApi? _maybeEmuAPI { get; set; }
-        [RequiredApi]
-        public IGameInfoApi? _maybeGameInfoAPI { get; set; }
         [RequiredApi]
         public IGuiApi? _maybeGuiAPI { get; set; }
         [RequiredApi]
@@ -58,11 +57,15 @@ namespace BizHawk.Tool.CrystalCtrl
             [typeof(ICommApi)] = _maybeCommAPI ?? throw new NullReferenceException(),
             [typeof(IEmuClientApi)] = _maybeClientAPI ?? throw new NullReferenceException(),
             [typeof(IEmulationApi)] = _maybeEmuAPI ?? throw     new NullReferenceException(),
-            [typeof(IGameInfoApi)] = _maybeGameInfoAPI ?? throw new NullReferenceException(),
             [typeof(IGuiApi)] = _maybeGuiAPI ?? throw new NullReferenceException(),
             [typeof(IMemoryApi)] = _maybeMemAPI ?? throw new NullReferenceException(),
             [typeof(IMemoryEventsApi)] = _maybeMemoryEventsAPI ?? throw new NullReferenceException()
         });
+
+        //TODO: should these do anything special?
+        bool IToolForm.IsActive => true;
+
+        bool IToolForm.IsLoaded => true;
 
         //Game constants
         const uint BattleMode = 0xD22D;
@@ -215,8 +218,8 @@ namespace BizHawk.Tool.CrystalCtrl
                     
                     AvailableActionsMsg msg = new AvailableActionsMsg();
                     msg.pokemon = readEnemyParty();
-                    msg.moves = readEnemyMoves();
-                    msg.items = readEnemyItems();
+                    msg.moves = readEnemyMoves().ToList();
+                    msg.items = readEnemyItems().ToList();
                     updateClientActions(msg);
                 }
             }, BattleTurn, "System Bus");
@@ -461,24 +464,17 @@ namespace BizHawk.Tool.CrystalCtrl
             return partyInfo;
         }
 
-        private List<string> readEnemyItems()
+        private IEnumerable<string> readEnemyItems()
         {
             var itemIds = _maybeMemAPI.ReadByteRange(EnemyTrainerItem1, 2, "System Bus");
-            itemIds.RemoveAll(id => id == 0);
-            return itemIds.ConvertAll<string>(id => DataHelpers.itemName(id));
+            return itemIds.Where(id => id != 0).Select(id => DataHelpers.itemName(id));
         }
 
-        private List<string> readEnemyMoves()
+        private IEnumerable<string> readEnemyMoves()
         {
             //Read in move IDs from list - remove moves with id of 0 (represent empty move slots)
             var moveIds = _maybeMemAPI.ReadByteRange(EnemyMonMoves, 4, "System Bus");
-            moveIds.RemoveAll(move => move == 0);
-            var moveStrings = new List<string>();
-            foreach (byte moveId in moveIds)
-            {
-                moveStrings.Add(DataHelpers.moveName(moveId));
-            }
-            return moveStrings;
+            return moveIds.Where(id => id != 0).Select( id => DataHelpers.moveName(id));
         }
 
         private static MsgsCommon.Status readStatusFlags(byte statusFlags){
@@ -1063,20 +1059,16 @@ namespace BizHawk.Tool.CrystalCtrl
         {
             //TODO: can simplify this maybe?
             UInt16 currentPC = (UInt16)_maybeEmuAPI.GetRegister("PC");
-            byte currentSPl = (byte)_maybeEmuAPI.GetRegister("SPl");
-            byte currentSPh = (byte)_maybeEmuAPI.GetRegister("SPh");
 
-            UInt16 currentSP = BitConverter.IsLittleEndian ? 
-                BitConverter.ToUInt16(new byte[] {currentSPl, currentSPh}, 0) :
-                BitConverter.ToUInt16(new byte[] { currentSPh, currentSPl }, 0);
+            var currentSP = (ulong)_maybeEmuAPI.GetRegister("SP");
 
-            //read memory at current SP, set PC to stored address (account for GB endianess)
-            List<byte> retAddress = _maybeMemAPI.ReadByteRange(currentSP, 2, "System Bus");
-            //Flipped because GB stores address in little endian
-            _maybeEmuAPI.SetRegister("PCh", (int)retAddress[1]);
-            _maybeEmuAPI.SetRegister("PCl", (int)retAddress[0]);
+            var retAddress = _maybeMemAPI.ReadByteRange((long)currentSP, 2, "System Bus");
+            var retAddressValue = BitConverter.ToInt16((byte[])retAddress, 0);
+            _maybeEmuAPI.SetRegister("PC", retAddressValue);
+
             UInt16 newSP = (UInt16)(currentSP + 2);
-            set16BitRegister(newSP, "SPh", "SPl");
+            _maybeEmuAPI.SetRegister("SP", newSP);
+
         }
 
     }
